@@ -30,7 +30,12 @@ const props = withDefaults(
     height?: string
     placeholder?: string
     /** lint 探测函数：返回错误列表 */
-    lint?: (doc: string) => Array<{ from: number; to: number; message: string }>
+    lint?: (doc: string) => Array<{
+      from: number
+      to: number
+      message: string
+      severity?: 'error' | 'warning' | 'info'
+    }>
   }>(),
   {
     mode: 'js',
@@ -122,7 +127,13 @@ function buildExtensions() {
 
   const lintSource =
     props.lint
-      ? linter((view: EditorView) => props.lint!(view.state.doc.toString()), { delay: 500 })
+      ? linter(
+          (view: EditorView) =>
+            props
+              .lint!(view.state.doc.toString())
+              .map((d) => ({ ...d, severity: d.severity ?? 'info' })),
+          { delay: 500 }
+        )
       : props.mode === 'json'
         ? undefined
         : linter((view: EditorView) => {

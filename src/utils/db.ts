@@ -12,6 +12,7 @@
  *  - inspection_table     自动巡检异常记录
  */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import { resetMasterKeySession, sha256Hex } from '@/utils/crypto'
 import type {
   AccountGroup,
   BatchTask,
@@ -378,13 +379,35 @@ export async function pruneOperationLogs(retentionDays: number): Promise<number>
   return stale.length
 }
 
-/** 校验日志哈希链是否被篡改 */
+/**
+ * 校验日志哈希链是否被篡改。
+ * - 逐条重算内容哈希并比对（含首条之后的 prevHash 链接）
+ * - 首条残留记录作为清理后的新锚点，其 prevHash 不再要求是 GENESIS（兼容按保留时长清理）
+ */
 export async function verifyLogChain(): Promise<{ valid: boolean; brokenAt?: string }> {
   const all = (await getAllRecords<OperationLog>(STORE.opLog)).sort((a, b) => a.time - b.time)
-  let prevHash = 'GENESIS'
-  for (const row of all) {
-    if (row.prevHash !== prevHash) return { valid: false, brokenAt: row.id }
-    prevHash = row.hash
+  let expectedPrev = 'GENESIS'
+  for (let i = 0; i < all.length; i++) {
+    const row = all[i]
+    const payload = JSON.stringify({
+      module: row.module,
+      action: row.action,
+      detail: row.detail,
+      time: row.time
+    })
+    if (i === 0) {
+      // 清理后的新起点：不校验锚值来源，只校验其内容 hash 是否被篡改
+      if ((await sha256Hex(`${row.prevHash}::${payload}`)) !== row.hash) {
+        return { valid: false, brokenAt: row.id }
+      }
+      expectedPrev = row.hash
+      continue
+    }
+    if (row.prevHash !== expectedPrev) return { valid: false, brokenAt: row.id }
+    if ((await sha256Hex(`${row.prevHash}::${payload}`)) !== row.hash) {
+      return { valid: false, brokenAt: row.id }
+    }
+    expectedPrev = row.hash
   }
   return { valid: true }
 }
@@ -494,9 +517,10 @@ export async function restoreBackup(
   return { accounts: accounts.length, groups: groups.length, templates: templates.length }
 }
 
-/** 清空全部本地数据（危险操作，需二次确认） */
+/** 清空全部本地数据（危险操作，需二次确认），并重置会话内存主密钥 */
 export async function wipeAllData(): Promise<void> {
   await Promise.all(Object.values(STORE).map((store) => clearStore(store)))
+  resetMasterKeySession()
 }
 
 /**

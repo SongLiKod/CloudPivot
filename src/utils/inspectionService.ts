@@ -17,6 +17,7 @@ import { useResourceStore } from '@/store/useResourceStore'
 import { useLogStore } from '@/store/useLogStore'
 import { formatTime } from './format'
 import { isLocked } from '@/utils/lockService'
+import { useSettingsStore } from '@/store/useSettingsStore'
 
 export interface InspectionResult {
   issues: InspectionIssue[]
@@ -137,6 +138,7 @@ let running = false
 /** 执行一轮巡检 */
 export async function runInspection(): Promise<InspectionResult> {
   if (isLocked()) return { issues: [], passed: true }
+  if (!useSettingsStore().config.inspectionEnabled) return { issues: [], passed: true }
   if (running) return { issues: [], passed: true }
   running = true
   try {
@@ -162,12 +164,19 @@ export async function runInspection(): Promise<InspectionResult> {
   }
 }
 
-/** 启动周期巡检 */
-export function startInspectionLoop(intervalMinutes: number): ReturnType<typeof setInterval> {
-  const timer = setInterval(() => {
+let loopTimer: ReturnType<typeof setInterval> | null = null
+
+/** 重建周期巡检（随设置启停与间隔变更，幂等） */
+export function rebuildInspectionLoop(): void {
+  if (loopTimer) {
+    clearInterval(loopTimer)
+    loopTimer = null
+  }
+  const settings = useSettingsStore()
+  if (!settings.config.inspectionEnabled) return
+  loopTimer = setInterval(() => {
     if (isLocked()) return
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
     void runInspection()
-  }, Math.max(5, intervalMinutes) * 60_000)
-  return timer
+  }, Math.max(5, settings.config.inspectionIntervalMinutes) * 60_000)
 }

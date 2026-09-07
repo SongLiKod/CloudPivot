@@ -220,7 +220,7 @@ async function execute<TResult>(
           params: options.params,
           data: options.data,
           headers: options.headers,
-          timeout: ctx.timeout ?? clientDefaults.timeout,
+          timeout: options.timeout ?? ctx.timeout ?? clientDefaults.timeout,
           // 透传上下文给拦截器
           ...({ __cf: ctx } as Record<string, unknown>)
         } as AxiosRequestConfig)

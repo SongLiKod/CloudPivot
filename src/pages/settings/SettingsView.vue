@@ -367,6 +367,7 @@ import { useSettingsStore, SYNC_INTERVAL_OPTIONS } from '@/store/useSettingsStor
 import { useAccountStore } from '@/store/useAccountStore'
 import { useLogStore } from '@/store/useLogStore'
 import { createBackup, restoreBackup, clearAllExceptAccounts, wipeAllData } from '@/utils/db'
+import { resetMasterKeySession } from '@/utils/crypto'
 import { useResourceStore } from '@/store/useResourceStore'
 import {
   lockState,
@@ -488,6 +489,9 @@ async function applyRestore(content: string) {
   try {
     const payload = JSON.parse(content) as BackupPayload
     const result = await restoreBackup(payload, { overwriteLogs: restoreOverwriteLogs.value })
+    // 备份可能写入新的 __master_key__，重置会话主密钥使其与磁盘状态一致
+    await resetMasterKeySession()
+    accountStore.loaded = false
     await accountStore.load()
     await settingsStore.init()
     ElMessage.success(`还原成功：账号 ${result.accounts} / 分组 ${result.groups} / 模板 ${result.templates}`)
@@ -595,11 +599,14 @@ async function savePin() {
 async function onToggleHarden(value: string | number | boolean) {
   const enable = !!value
   if (enable) {
-    await ElMessageBox.confirm(
+    const confirmed = await ElMessageBox.confirm(
       '开启后，锁定时将以口令加密主密钥、无法解密任何数据；若忘记口令，本机加密数据将无法恢复（建议先导出备份）。确认开启？',
       '口令加固确认',
       { type: 'warning', confirmButtonText: '开启', cancelButtonText: '取消' }
-    ).catch(() => false)
+    )
+      .then(() => true)
+      .catch(() => false)
+    if (!confirmed) return
   }
   hardenSaving.value = true
   try {
@@ -755,9 +762,13 @@ async function doWipe() {
   wiping.value = true
   try {
     await wipeAllData()
-    await accountStore.load()
+    await resetMasterKeySession()
+    accountStore.$reset()
+    settingsStore.$reset()
+    useResourceStore().resetAll()
     await settingsStore.init()
     await themeStore.setMode('system')
+    await accountStore.load()
     ElMessage.warning('本机数据已全部清空')
     await logStore.write({ module: 'system', action: '清空数据', detail: '清空了全部本地数据', level: 'warning' })
   } catch (error) {

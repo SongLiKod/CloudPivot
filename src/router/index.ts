@@ -111,8 +111,17 @@ const router = createRouter({
 })
 
 router.afterEach((to) => {
+  stopRouteLoading()
   const title = to.meta.title as string | undefined
   document.title = title ? `${title} · 云枢 CloudPivot` : '云枢 CloudPivot'
+})
+
+router.beforeEach(() => {
+  startRouteLoading()
+})
+
+router.onError(() => {
+  stopRouteLoading()
 })
 
 export default router

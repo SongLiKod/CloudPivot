@@ -29,6 +29,9 @@ export interface LogQuery {
 
 const LOG_CHAIN_GENESIS = 'GENESIS'
 
+/** 串行化哈希链写入，避免并发读到同一个链头导致分叉 */
+let chainQueue: Promise<unknown> = Promise.resolve()
+
 export const useLogStore = defineStore('log', {
   state: () => ({
     rows: [] as OperationLog[],
@@ -39,7 +42,7 @@ export const useLogStore = defineStore('log', {
   }),
 
   actions: {
-    /** 写入一条操作日志（自动接续哈希链） */
+    /** 写入一条操作日志（自动接续哈希链，串行执行） */
     async write(entry: {
       module: string
       action: string
@@ -50,33 +53,41 @@ export const useLogStore = defineStore('log', {
       accountName?: string
       error?: string
     }): Promise<OperationLog> {
-      const level = entry.level ?? (entry.result === 'fail' ? 'error' : 'info')
-      const last = await getLatestOperationLog()
-      const prevHash = last?.hash ?? LOG_CHAIN_GENESIS
-      const payload = JSON.stringify({
-        module: entry.module,
-        action: entry.action,
-        detail: entry.detail,
-        time: Date.now()
-      })
-      const hash = await sha256Hex(`${prevHash}::${payload}`)
+      const run = async (): Promise<OperationLog> => {
+        const level = entry.level ?? (entry.result === 'fail' ? 'error' : 'info')
+        const last = await getLatestOperationLog()
+        const prevHash = last?.hash ?? LOG_CHAIN_GENESIS
+        const payload = JSON.stringify({
+          module: entry.module,
+          action: entry.action,
+          detail: entry.detail,
+          time: Date.now()
+        })
+        const hash = await sha256Hex(`${prevHash}::${payload}`)
 
-      const log: OperationLog = {
-        id: randomId('log'),
-        time: Date.now(),
-        level,
-        module: entry.module,
-        action: entry.action,
-        detail: entry.detail,
-        accountId: entry.accountId,
-        accountName: entry.accountName,
-        result: entry.result ?? 'success',
-        error: entry.error,
-        hash,
-        prevHash
+        const log: OperationLog = {
+          id: randomId('log'),
+          time: Date.now(),
+          level,
+          module: entry.module,
+          action: entry.action,
+          detail: entry.detail,
+          accountId: entry.accountId,
+          accountName: entry.accountName,
+          result: entry.result ?? 'success',
+          error: entry.error,
+          hash,
+          prevHash
+        }
+        await appendOperationLogs([log])
+        return log
       }
-      await appendOperationLogs([log])
-      return log
+      const task = chainQueue.then(run, run)
+      chainQueue = task.then(
+        () => undefined,
+        () => undefined
+      )
+      return task
     },
 
     /** 批量写入（备份还原场景） */

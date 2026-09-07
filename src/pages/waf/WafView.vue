@@ -47,8 +47,8 @@
             </el-table-column>
             <el-table-column label="操作" width="130" fixed="right">
               <template #default="{ row }">
-                <el-button size="small" text type="primary" @click="openRuleDialog(row)">编辑</el-button>
-                <el-button size="small" text type="danger" @click="removeRule(row)">删除</el-button>
+                <el-button size="small" text type="primary" @click="openRuleDialog(row as CfAccessRule)">编辑</el-button>
+                <el-button size="small" text type="danger" @click="removeRule(row as CfAccessRule)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -61,7 +61,7 @@
             </el-table-column>
             <el-table-column label="匹配 URL" min-width="200">
               <template #default="{ row }">
-                <span class="cp-mono cp-text-sm">{{ rateLimitUrl(row) }}</span>
+                <span class="cp-mono cp-text-sm">{{ rateLimitUrl(row as CfRateLimit) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="阈值" width="140">
@@ -77,14 +77,14 @@
                 <el-switch
                   :model-value="!row.disabled"
                   size="small"
-                  @change="(v: string | number | boolean) => toggleRateLimit(row, !!v)"
+@change="(v: string | number | boolean) => toggleRateLimit(row as CfRateLimit, !!v)"
                 />
               </template>
             </el-table-column>
             <el-table-column label="操作" width="130" fixed="right">
               <template #default="{ row }">
-                <el-button size="small" text type="primary" @click="openLimitDialog(row)">编辑</el-button>
-                <el-button size="small" text type="danger" @click="removeRateLimit(row)">删除</el-button>
+                <el-button size="small" text type="primary" @click="openLimitDialog(row as CfRateLimit)">编辑</el-button>
+                <el-button size="small" text type="danger" @click="removeRateLimit(row as CfRateLimit)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -244,7 +244,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Upload } from '@element-plus/icons-vue'
 import { usePlatform } from '@/utils/platform'
@@ -369,6 +369,11 @@ async function loadRules() {
 function onRefreshRules() {
   return loadRules()
 }
+
+// 切换域名时自动重新加载规则，避免停留在上一个域名的数据
+watch(zoneId, () => {
+  if (zoneId.value) void loadRules()
+})
 
 /* ---------------- IP 规则 CRUD ---------------- */
 const ruleDialogVisible = ref(false)

@@ -22,7 +22,7 @@ import { useThemeStore } from '@/store/useThemeStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAccountStore } from '@/store/useAccountStore'
 import { rebuildAutoSync } from '@/utils/syncService'
-import { runInspection, startInspectionLoop } from '@/utils/inspectionService'
+import { runInspection, rebuildInspectionLoop } from '@/utils/inspectionService'
 import { initViewportWatch } from '@/utils/platform'
 import { initLock, isLockActive, whenUnlocked } from '@/utils/lockService'
 
@@ -70,12 +70,13 @@ async function bootstrap() {
     await initializeData()
   }
 
-  // 周期性巡检（随设置启停）
-  const inspectionTimer = startInspectionLoop(settingsStore.config.inspectionIntervalMinutes)
+  // 周期性巡检（随设置启停/间隔变更重建）
+  rebuildInspectionLoop()
   // 设置变更时重建
   settingsStore.$subscribe((mutation) => {
     void mutation
     rebuildAutoSync()
+    rebuildInspectionLoop()
   })
 
   // 全局异常兜底：禁止密钥明文进入日志
@@ -83,8 +84,6 @@ async function bootstrap() {
     const message = String((event.reason as Error)?.message ?? event.reason ?? '')
     if (message) console.warn('[CloudPivot] unhandled:', message)
   })
-
-  void inspectionTimer
 }
 
 /** 解锁后（或未启用锁时）加载账号数据并做首轮巡检 */

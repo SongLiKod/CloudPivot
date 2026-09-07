@@ -18,6 +18,7 @@ import {
 } from '@/utils/crypto'
 import { App as CapacitorApp } from '@capacitor/app'
 import { isAndroid, isElectron } from '@/utils/platform'
+import { purgeSessionCredentials } from '@/store/credentialService'
 
 const LOCK_CONFIG_KEY = '__app_lock__'
 const PIN_RECORD_KEY = '__app_pin__'
@@ -128,6 +129,8 @@ export function lock(): void {
   lockState.locked = true
   lockState.failCount = 0
   sessionPin = null
+  // 同时清空内存中的明文凭据缓存，避免“仅 UI 锁定”后凭据仍被复用
+  purgeSessionCredentials()
 }
 
 /** 解锁：设置会话口令并执行待办初始化 */

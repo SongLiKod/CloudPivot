@@ -145,7 +145,10 @@ export const useBatchStore = defineStore('batch', {
           const messageHolder: { text?: string } = {}
           const emit: SubTaskEmit = ({ success, message }) => {
             messageHolder.text = message
-            void success
+            // 业务层显式标记失败时，让该子任务按失败计
+            if (success === false) {
+              throw new Error(message || '执行失败')
+            }
           }
           await handler(item, emit, index)
           return messageHolder.text

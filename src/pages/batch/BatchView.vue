@@ -39,7 +39,7 @@
               <el-tag v-if="row.dangerous" size="small" type="danger" effect="dark">高危</el-tag>
             </div>
             <el-progress
-              :percentage="progress(row)"
+              :percentage="progress(row as BatchTask)"
               :status="row.status === 'finished' && !row.failCount ? 'success' : row.status === 'failed' ? 'exception' : undefined"
               :stroke-width="6"
               style="max-width: 320px; margin-top: 4px"
@@ -333,7 +333,11 @@ async function executeItem(
       return
     }
     case 'account-refresh': {
-      await accountStore.refreshAccount(item.accountId)
+      const result = await accountStore.refreshAccount(item.accountId)
+      if (result === null) {
+        emit({ success: false, message: '资源刷新失败（网络异常或账号不可用）' })
+        return
+      }
       emit({ success: true, message: '资源已刷新' })
       return
     }

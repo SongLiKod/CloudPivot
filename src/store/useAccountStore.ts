@@ -378,7 +378,8 @@ export const useAccountStore = defineStore('account', {
           '检测账号',
           result.ok ? `账号「${account.name}」状态正常` : `账号「${account.name}」异常：${result.statusMessage}`,
           result.ok ? 'success' : 'warning',
-          accountId
+          accountId,
+          result.ok ? 'success' : 'fail'
         )
         return result
       } finally {
@@ -681,7 +682,8 @@ export const useAccountStore = defineStore('account', {
       action: string,
       detail: string,
       level: 'info' | 'success' | 'warning' | 'error' = 'success',
-      accountId?: string
+      accountId?: string,
+      result?: 'success' | 'fail'
     ) {
       const logStore = useLogStore()
       const account = accountId ? this.accounts.find((a) => a.id === accountId) : undefined
@@ -690,7 +692,7 @@ export const useAccountStore = defineStore('account', {
         action,
         detail,
         level,
-        result: level === 'error' ? 'fail' : 'success',
+        result: result ?? (level === 'error' ? 'fail' : 'success'),
         accountId,
         accountName: account?.name
       })

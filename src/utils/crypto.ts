@@ -332,6 +332,11 @@ export async function getOrWarmMasterKey(): Promise<void> {
   await loadOrCreateMasterKey()
 }
 
+/** 清空主密钥内存缓存（本地数据全量抹除 / 备份恢复后调用，下次按磁盘状态重新加载） */
+export function resetMasterKeySession(): void {
+  cachedKey = null
+}
+
 /** 加密任意可序列化数据，返回密文载荷 */
 export async function encryptJSON<T>(data: T): Promise<EncryptedPayload> {
   const subtle = getSubtle()

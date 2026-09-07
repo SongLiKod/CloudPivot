@@ -25,7 +25,7 @@
         <el-table :data="filteredScripts" v-loading="resourceStore.workers.loading" class="script-table">
           <el-table-column label="脚本名称" min-width="240">
             <template #default="{ row }">
-              <router-link :to="detailLink(row)" class="script-name cp-text-bold">{{ row.id }}</router-link>
+              <router-link :to="detailLink(row as CfWorkerScript)" class="script-name cp-text-bold">{{ row.id }}</router-link>
               <div class="cp-text-sm cp-text-secondary">{{ row.handlers?.length ? `handlers: ${row.handlers.join(', ')}` : 'Cloudflare Worker' }}</div>
             </template>
           </el-table-column>
@@ -33,13 +33,13 @@
             <template #default="{ row }">
               <div class="script-acc">{{ accountName(row.__accountId) }}</div>
               <a
-                v-if="workerLink(row)"
-                :href="workerLink(row)"
+                v-if="workerLink(row as CfWorkerScript)"
+                :href="workerLink(row as CfWorkerScript)"
                 target="_blank"
                 rel="noopener"
                 class="cp-link cp-text-sm"
               >
-                {{ workerLinkLabel(row) }}
+                {{ workerLinkLabel(row as CfWorkerScript) }}
               </a>
               <span v-else class="cp-text-secondary cp-text-sm">-</span>
             </template>
@@ -52,8 +52,8 @@
           </el-table-column>
           <el-table-column label="操作" width="130" fixed="right">
             <template #default="{ row }">
-              <el-button size="small" text type="primary" @click="goDetail(row)">详情</el-button>
-              <el-button size="small" text type="danger" @click="removeScript(row)">删除</el-button>
+              <el-button size="small" text type="primary" @click="goDetail(row as CfWorkerScript)">详情</el-button>
+              <el-button size="small" text type="danger" @click="removeScript(row as CfWorkerScript)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -226,7 +226,7 @@
               </el-table-column>
               <el-table-column label="操作" width="110" fixed="right">
                 <template #default="{ row }">
-                  <el-button size="small" text type="danger" @click="removeDomain(row)">删除</el-button>
+                  <el-button size="small" text type="danger" @click="removeDomain(row as CfWorkerDomain)">删除</el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -254,8 +254,8 @@
               </el-table-column>
               <el-table-column label="操作" width="150" fixed="right">
                 <template #default="{ row }">
-                  <el-button size="small" text type="warning" @click="unbindRoute(row)">解绑</el-button>
-                  <el-button size="small" text type="danger" @click="removeRoute(row)">删除</el-button>
+                  <el-button size="small" text type="warning" @click="unbindRoute(row as CfWorkerRoute)">解绑</el-button>
+                  <el-button size="small" text type="danger" @click="removeRoute(row as CfWorkerRoute)">删除</el-button>
                 </template>
               </el-table-column>
             </el-table>

@@ -108,7 +108,9 @@ export const useResourceStore = defineStore('resource', {
         // 先读缓存
         const cached = await readAllCacheByKind<CfZone[]>('zone')
         if (cached.length) {
-          this.zones.rows = cached.flatMap((c) => c.data)
+          this.zones.rows = cached.flatMap((c) =>
+            c.data.map((z) => ({ ...z, __accountId: c.accountId }))
+          )
           this.zones.cachedAt = Math.max(...cached.map((c) => c.cachedAt))
           this.zones.offline = true
           this.zones.loaded = true
@@ -135,7 +137,7 @@ export const useResourceStore = defineStore('resource', {
         } else {
           this.zones.error = undefined
         }
-        this.zones.offline = false
+        this.zones.offline = zoneResults.length > 0 && zoneFailures.length === zoneResults.length
         this.zones.loaded = true
       } catch (error) {
         this.zones.error = (error as Error).message
@@ -159,11 +161,20 @@ export const useResourceStore = defineStore('resource', {
       try {
         const accountStore = useAccountStore()
 
-        // 无指定 zone 时，从缓存加载全部 DNS
+        // 无指定 zone 时，从缓存加载全部 DNS（补回账号归属，避免离线时无法归类）
         if (!zoneIds.length) {
           const cached = await readAllCacheByKind<CfDnsRecord[]>('dns')
           if (cached.length) {
-            this.dns.rows = cached.flatMap((c) => c.data)
+            this.dns.rows = cached.flatMap((c) =>
+              c.data.map((r) => ({
+                ...r,
+                __accountId: c.accountId,
+                __zoneName: (() => {
+                  const z = this.zones.rows.find((zz) => zz.id === r.zone_id)
+                  return z?.name ?? ''
+                })()
+              }))
+            )
             this.dns.cachedAt = Math.max(...cached.map((c) => c.cachedAt))
             this.dns.offline = true
             this.dns.loaded = true
@@ -222,7 +233,7 @@ export const useResourceStore = defineStore('resource', {
           } else {
             this.dns.error = undefined
           }
-          this.dns.offline = false
+          this.dns.offline = results.length > 0 && failures.length === results.length
         }
         this.dns.loaded = true
       } catch (error) {
@@ -318,7 +329,9 @@ export const useResourceStore = defineStore('resource', {
         const accountStore = useAccountStore()
         const zoneRows = this.zones.rows.filter((z) => z.status === 'active' && !z.paused)
         const results = await runWithConcurrency(zoneRows.slice(0, 30), 3, async (zone) => {
-          const account = accountStore.accounts.find((a) => a.id === zone.__accountId)
+          const account =
+            accountStore.resolveAccount(zone.__accountId) ??
+            accountStore.resolveAccount(zone.account?.id)
           if (!account) return null
           const ctx = await buildRequestContext(account)
           const rules = await wafApi.listAccessRules(ctx, zone.id)

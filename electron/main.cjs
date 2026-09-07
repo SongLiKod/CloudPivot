@@ -5,7 +5,7 @@
  * - preload 通过 contextBridge 暴露 window.cloudpivot（文件读写 / 窗口控制 / 系统信息 / 主题）
  * - 安全基线：contextIsolation=true、nodeIntegration=false
  */
-const { app, BrowserWindow, ipcMain, dialog, nativeTheme } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, nativeTheme, net } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 
@@ -134,6 +134,35 @@ ipcMain.handle('system:getInfo', () => ({
 
 ipcMain.handle('theme:setNativeTheme', (_event, theme) => {
   nativeTheme.themeSource = theme === 'dark' ? 'dark' : 'light'
+})
+
+/* ------------------------------------------------------------------ */
+/* IPC：邮件发送（主进程发起，规避 file:// 下的 CORS 限制）              */
+/* ------------------------------------------------------------------ */
+ipcMain.handle('email:send', async (_event, opts) => {
+  const endpoint = 'https://api.emailjs.com/api/v1.0/email/send'
+  const response = await net.fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      service_id: opts?.serviceId,
+      template_id: opts?.templateId,
+      user_id: opts?.publicKey,
+      template_params: opts?.params ?? {}
+    })
+  })
+  const text = await response.text()
+  if (!response.ok) {
+    let message = `邮件发送失败（HTTP ${response.status}）`
+    try {
+      const body = JSON.parse(text)
+      if (body?.message) message = body.message
+    } catch {
+      /* 非 JSON 错误体 */
+    }
+    throw new Error(message)
+  }
+  return true
 })
 
 /* ------------------------------------------------------------------ */

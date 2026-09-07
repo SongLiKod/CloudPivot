@@ -23,5 +23,8 @@ contextBridge.exposeInMainWorld('cloudpivot', {
   system: {
     getInfo: () => ipcRenderer.invoke('system:getInfo')
   },
+  email: {
+    send: (opts) => ipcRenderer.invoke('email:send', opts)
+  },
   setNativeTheme: (theme) => ipcRenderer.invoke('theme:setNativeTheme', theme)
 })

@@ -42,6 +42,15 @@ interface CloudPivotDesktopBridge {
   system: {
     getInfo: () => Promise<{ versions: Record<string, string>; paths: Record<string, string> }>
   }
+  /** 邮件发送（主进程发起，规避 CORS） */
+  email: {
+    send: (opts: {
+      serviceId: string
+      templateId: string
+      publicKey: string
+      params: Record<string, string>
+    }) => Promise<boolean>
+  }
   /** 主题：通知主进程同步原生窗口外观 */
   setNativeTheme: (theme: 'light' | 'dark') => void
 }

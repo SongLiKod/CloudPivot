@@ -1,0 +1,154 @@
+# 云枢 CloudPivot 技术文档 V1.1
+文档版本：V1.1
+编制日期：2026‑09‑07
+项目代号：cf‑cloudpivot
+输出产物：CloudPivot‑Setup.exe、CloudPivot‑绿色版.zip、CloudPivot‑Android.apk
+项目说明：本地私有化客户端，无自建服务端；双端 Windows + Android；支持跟随系统 / 浅色 / 深色主题
+
+## 1 整体技术架构
+### 1.1 运行平台
+1. Windows：Windows10 / Windows11（32/64位），Capacitor‑Electron打包；输出安装包与绿色免压缩包。
+2. Android：Android10‑Android14，Capacitor‑Android打包输出Release APK。
+
+> 本项目为纯客户端应用，**没有后端服务**；业务逻辑全部运行在本地设备；网络请求直接调用Cloudflare开放API；账号密钥全部本地加密存储，不会上传任何第三方服务器。
+
+### 1.2 完整技术栈
+- 跨端框架：Capacitor
+- 前端框架：Vue3 + Vite
+- 开发语言：TypeScript / JavaScript
+- 样式：SCSS + CSS变量，维护浅色、深色两套主题变量
+- UI组件库
+  - Windows桌面：Element Plus（自定义主题变量覆盖）
+  - Android移动端：Vant4（自定义主题变量覆盖）
+- 状态管理：Pinia
+- 网络请求：Axios，封装拦截器、鉴权、错误重试、限流提示
+- 本地存储：IndexedDB，存储账号、缓存资源、操作日志、系统配置
+- 图表组件：ECharts，支持浅色/深色主题动态切换
+- 加密库：AES‑256‑GCM，用于API密钥加密存储
+
+### 1.3 主题模块实现要点
+1. Pinia维护主题状态字段：`mode: 'system' | 'light' | 'dark'`
+2. system模式：调用Capacitor系统接口监听操作系统外观变化，自动切换浅色/深色。
+3. 通过修改HTML根节点class切换主题：`theme‑light` / `theme‑dark`，CSS变量跟随class生效，无需重启应用。
+4. ECharts图表、代码编辑器组件根据当前主题动态切换配色。
+5. 用户主题配置持久化保存到IndexedDB系统配置表。
+
+## 2 项目源码目录结构
+```
+src
+├── api                # Cloudflare API 接口封装层
+├── assets             # 静态资源、主题样式
+│   ├── theme‑light.scss
+│   └── theme‑dark.scss
+├── components         # 公共组件：表格、弹窗、代码编辑器、批量任务面板
+├── layouts            # 全局布局组件
+├── pages              # 业务页面
+│   ├── account        # 账号管理页面
+│   ├── dashboard      # 仪表盘首页
+│   ├── dns            # 域名 DNS 管理
+│   ├── workers        # Workers 管理
+│   ├── pages          # Pages 项目管理
+│   ├── waf            # WAF 安全规则
+│   ├── batch‑task     # 批量任务队列面板
+│   ├── log            # 操作日志审计
+│   └── settings       # 系统设置（主题切换入口）
+├── store              # Pinia 状态管理
+│   ├── useAccountStore.ts
+│   ├── useThemeStore.ts
+│   └── useLogStore.ts
+├── utils              # 工具函数：加密、时间格式化、批量任务调度
+└── capacitor‑config.ts # Capacitor 全局配置
+```
+
+## 3 核心模块技术说明
+### 3.1 账号与加密模块
+1. 账号基础信息存入IndexedDB；API原始密钥使用AES‑256‑GCM加密，只保存密文，禁止明文持久化。
+2. 新增账号调用`GET /user`接口校验Token有效性。
+3. 定时同步任务：Windows使用Electron定时器；Android使用Capacitor后台任务，处理后台保活。
+4. Excel批量导入账号：解析表格字段，循环鉴权校验，捕获错误提示。
+
+### 3.2 批量任务调度模块
+1. 内存维护任务队列，支持任务入队、进度更新、暂停、终止。
+2. 请求并发数限制，防止触发Cloudflare 429限流。
+3. 每一条子任务执行结果写入IndexedDB任务日志表。
+
+### 3.3 代码编辑器模块
+1. 用于Workers脚本编辑；根据当前主题自动切换编辑器配色。
+2. 提供语法高亮、基础语法错误提示。
+
+### 3.4 IndexedDB数据表设计
+1. account_table：账号信息（密钥存储密文）
+2. resource_cache：域名、Workers、Pages资源缓存
+3. task_log_table：批量任务执行日志
+4. operation_log_table：全量操作审计日志
+5. system_config_table：系统配置，主题模式、同步周期等
+
+## 4 Cloudflare V4 API接口清单
+基础域名：`https://api.cloudflare.com/client/v4`
+> 每个请求携带对应账号Authorization请求头；客户端统一封装重试、异常捕获、限流提示。
+
+### 4.1 账号鉴权与配额
+1. `GET /user`：校验Token有效性，获取账号基础信息
+2. `GET /user/rate_limit`：获取账号流量、Workers配额信息
+
+### 4.2 域名管理
+1. `GET /zones` 获取账号域名列表
+2. `GET /zones/{zone_id}` 获取域名详情
+3. `PUT /zones/{zone_id}/activation_check` 域名启用/暂停
+
+### 4.3 DNS解析
+1. `GET /zones/{zone_id}/dns_records` 获取DNS记录列表
+2. `POST /zones/{zone_id}/dns_records` 新增DNS记录
+3. `PATCH /zones/{zone_id}/dns_records/{record_id}` 修改DNS记录
+4. `DELETE /zones/{zone_id}/dns_records/{record_id}` 删除DNS记录
+
+### 4.4 Workers接口
+1. `GET /accounts/{account_id}/workers/scripts` 获取脚本列表
+2. `PUT /accounts/{account_id}/workers/scripts/{script_name}` 创建/更新脚本代码
+3. `GET /accounts/{account_id}/workers/scripts/{script_name}/variables` 获取环境变量
+4. `GET/POST/PUT/DELETE /accounts/{account_id}/workers/routes` 路由增删改查
+5. `GET /accounts/{account_id}/analytics/workers/scripts` Workers用量统计
+
+### 4.5 Pages接口
+1. `GET /accounts/{account_id}/pages/projects` 获取Pages项目列表
+2. `POST /accounts/{account_id}/pages/projects` 创建Pages项目
+3. `PATCH /accounts/{account_id}/pages/projects/{project_name}` 修改项目配置
+4. `POST /accounts/{account_id}/pages/projects/{project_name}/deployments` 触发构建
+5. `GET /accounts/{account_id}/pages/projects/{project_name}/deployments/{deployment_id}` 获取部署日志
+
+### 4.6 WAF安全规则
+1. `GET /zones/{zone_id}/rulesets` 获取规则集
+2. `GET/POST/PUT/DELETE /zones/{zone_id}/firewall/access_rules/rules` IP黑白名单
+3. `GET/POST/PUT/DELETE /zones/{zone_id}/rate_limits` 速率限制规则
+
+### 4.7 统计监控
+1. `GET /zones/{zone_id}/analytics/dashboard` 仪表盘统计数据
+2. `GET /zones/{zone_id}/analytics/reports` 报表原始数据
+
+## 5 Windows Electron特有处理
+1. 托盘图标、最小化到托盘逻辑。
+2. 文件读写：备份导出、Excel导入读取、自定义备份存储路径。
+3. 全局快捷键注册。
+4. 高DPI屏幕适配处理。
+
+## 6 Android Capacitor特有处理
+1. 所需权限：网络权限、存储权限（导出备份文件）。
+2. 后台定时同步任务；Android后台休眠限制做降级提示。
+3. UI触控适配，下拉刷新组件。
+4. 文件导出写入手机公共存储目录。
+
+## 7 安全规范
+1. 任何界面、日志禁止输出明文API密钥；内存使用完毕及时清空敏感变量。
+2. 网络请求直连Cloudflare官方接口，不中转第三方代理服务。
+3. 高危批量操作弹窗二次确认。
+4. IndexedDB全部数据仅本地保存，不会自动上传服务器。
+
+## 8 打包输出产物
+1. Windows：`CloudPivot‑Setup.exe`安装包；`CloudPivot‑绿色版.zip`免安装包
+2. Android：`CloudPivot‑Android.apk` Release安装包
+
+## 9 项目风险点
+1. Cloudflare API频率限制：批量任务必须做并发控制，规避429限流。
+2. API Token权限范围各不相同，需要捕获权限不足异常并提示用户。
+3. Android系统后台休眠策略，部分机型定时同步会被系统杀死，需要UI降级提示。
+4. 加密密钥丢失，本地备份文件无法解密恢复，界面提示用户妥善保管备份。

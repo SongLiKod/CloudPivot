@@ -1,0 +1,60 @@
+/// CloudPivot 全局 SCSS 设计令牌（编译期常量 / mixin）
+/// 运行期颜色统一走 CSS 变量，见 theme-light.scss / theme-dark.scss
+
+// ---- 品牌色（浅色模式基准值） ----
+$cp-green: #22c55e;
+$cp-green-deep: #16a34a;
+$cp-green-soft: #86efac;
+$cp-green-dark-accent: #4ade80;
+
+// ---- 中性色 ----
+$cp-warning-light: #f59e0b;
+$cp-danger-light: #ef4444;
+$cp-warning-dark: #fbbf24;
+$cp-danger-dark: #f87171;
+
+// ---- 布局尺寸 ----
+$sidebar-width: 224px;
+$sidebar-width-collapsed: 64px;
+$header-height: 56px;
+$mobile-tabbar-height: 52px;
+$mobile-touch-min: 44px; // 安卓交互规范：触控目标 >= 44px
+$page-padding: 16px;
+$radius-sm: 6px;
+$radius-md: 10px;
+$radius-lg: 14px;
+
+// ---- 断点 ----
+$breakpoint-mobile: 768px;
+$breakpoint-tablet: 1024px;
+
+@mixin mobile {
+  @media (max-width: $breakpoint-mobile) {
+    @content;
+  }
+}
+
+@mixin desktop {
+  @media (min-width: $breakpoint-mobile + 1) {
+    @content;
+  }
+}
+
+@mixin ellipsis($lines: 1) {
+  @if $lines == 1 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  } @else {
+    display: -webkit-box;
+    -webkit-line-clamp: $lines;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+@mixin card {
+  background: var(--cp-bg-card);
+  border: 1px solid var(--cp-border);
+  border-radius: $radius-md;
+}

@@ -1,0 +1,332 @@
+/**
+ * 全局通用样式：布局工具类、卡片、滚动条、响应式适配
+ */
+@use './variables' as *;
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--cp-bg-page);
+  color: var(--cp-text-primary);
+  font-family: 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui,
+    -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.25s ease, color 0.25s ease;
+  overscroll-behavior-y: none;
+}
+
+a {
+  color: var(--cp-primary);
+  text-decoration: none;
+}
+
+/* ---- 滚动条 ---- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--cp-border-strong);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--cp-text-placeholder);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---- 页面容器 ---- */
+.cp-page {
+  padding: $page-padding;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100%;
+
+  @include mobile {
+    padding: 10px;
+    gap: 10px;
+  }
+}
+
+.cp-card {
+  @include card;
+  padding: 14px;
+  box-shadow: var(--cp-shadow-sm);
+
+  @include mobile {
+    padding: 12px;
+    border-radius: $radius-sm;
+  }
+}
+
+.cp-card__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--cp-text-primary);
+}
+
+.cp-card__title-extra {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--cp-text-secondary);
+}
+
+/* ---- 布局工具 ---- */
+.cp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cp-row--between {
+  justify-content: space-between;
+}
+.cp-row--end {
+  justify-content: flex-end;
+}
+.cp-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cp-flex-1 {
+  flex: 1;
+  min-width: 0;
+}
+.cp-gap-4 {
+  gap: 4px;
+}
+.cp-gap-12 {
+  gap: 12px;
+}
+.cp-mt-8 {
+  margin-top: 8px;
+}
+.cp-mt-12 {
+  margin-top: 12px;
+}
+
+/* ---- 文字工具 ---- */
+.cp-text-secondary {
+  color: var(--cp-text-secondary);
+}
+.cp-text-primary-color {
+  color: var(--cp-primary);
+}
+.cp-text-danger {
+  color: var(--cp-danger);
+}
+.cp-text-warning {
+  color: var(--cp-warning);
+}
+.cp-text-sm {
+  font-size: 12px;
+}
+.cp-text-lg {
+  font-size: 16px;
+}
+.cp-text-bold {
+  font-weight: 600;
+}
+.cp-mono {
+  font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-size: 12.5px;
+}
+.cp-ellipsis {
+  @include ellipsis(1);
+}
+.cp-ellipsis-2 {
+  @include ellipsis(2);
+}
+
+/* ---- 网格 ---- */
+.cp-grid {
+  display: grid;
+  gap: 12px;
+}
+.cp-grid--stat {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  @include mobile {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+}
+.cp-grid--chart {
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+.cp-grid--form {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- 状态圆点 ---- */
+.cp-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--cp-offline);
+
+  &.is-online {
+    background: var(--cp-success);
+  }
+  &.is-error {
+    background: var(--cp-danger);
+  }
+  &.is-warning {
+    background: var(--cp-warning);
+  }
+}
+
+/* ---- 列表卡片（移动端表格降级形态） ---- */
+.cp-list-card {
+  @include card;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  & + & {
+    margin-top: 8px;
+  }
+}
+.cp-list-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cp-list-card__title {
+  font-weight: 600;
+  font-size: 14px;
+  @include ellipsis(1);
+}
+.cp-list-card__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  color: var(--cp-text-secondary);
+}
+.cp-list-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--cp-border);
+}
+
+/* ---- 空状态 / 加载 ---- */
+.cp-empty {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--cp-text-secondary);
+  font-size: 13px;
+}
+.cp-loading {
+  padding: 30px 0;
+  text-align: center;
+  color: var(--cp-text-secondary);
+  font-size: 13px;
+}
+
+/* ---- 代码编辑器容器 ---- */
+.cp-editor {
+  border: 1px solid var(--cp-border);
+  border-radius: $radius-sm;
+  overflow: hidden;
+  background: var(--cp-bg-sunken);
+
+  .cm-editor {
+    height: 100%;
+    font-size: 13px;
+  }
+  .cm-editor.cm-focused {
+    outline: none;
+  }
+  .cm-scroller {
+    font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, 'Courier New', monospace !important;
+    line-height: 1.6;
+  }
+}
+
+/* ---- 拖拽 ---- */
+.cp-draggable {
+  cursor: grab;
+  &:active {
+    cursor: grabbing;
+  }
+}
+.cp-drop-target {
+  outline: 2px dashed var(--cp-primary);
+  outline-offset: -2px;
+  background: var(--cp-primary-bg);
+}
+
+/* ---- 移动端安全区 ---- */
+@include mobile {
+  .cp-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .cp-touch {
+    min-height: $mobile-touch-min;
+    min-width: $mobile-touch-min;
+  }
+}
+
+/* ---- 通用过渡 ---- */
+.cp-fade-enter-active,
+.cp-fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+.cp-fade-enter-from,
+.cp-fade-leave-to {
+  opacity: 0;
+}
+
+/* ---- 表格工具条 ---- */
+.cp-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+
+  @include mobile {
+    gap: 6px;
+  }
+}
+
+/* ---- 桌面端窗口拖拽区（Electron frameless 预留） ---- */
+.cp-titlebar-drag {
+  -webkit-app-region: drag;
+}
+.cp-titlebar-nodrag {
+  -webkit-app-region: no-drag;
+}

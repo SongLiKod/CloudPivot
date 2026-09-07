@@ -1,0 +1,80 @@
+# ===================== 依赖 =====================
+node_modules/
+.pnp
+.pnp.js
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/registry
+!.yarn/sdks
+!.yarn/versions
+
+# ===================== 构建产物 =====================
+dist/
+dist-electron/
+out/
+release/
+*.tsbuildinfo
+*.local
+
+# Vite / Vue
+vite.config.ts.*.tmp*
+*.log
+
+# ===================== Electron =====================
+electron/dist/
+electron/bin/
+*.exe
+*.dll
+*.pdb
+
+# ===================== Capacitor / Android / iOS =====================
+android/
+ios/
+# 仅在需要提交原生工程时移除以下注释
+# !android/app/src/main/assets
+.capacitor/
+capacitor-cordova-android-plugins/
+
+# ===================== 测试与覆盖率 =====================
+coverage/
+.nyc_output/
+.nycrc
+*.lcov
+
+# ===================== 缓存 =====================
+.cache/
+tmp/
+*.tsbuildinfo
+
+# 编辑器 / 系统
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# 敏感文件（本地私有化数据绝不入库）
+*.key
+*.pem
+*.crt
+.env
+.env.*
+!.env.example
+credentials.json
+secrets.*
+
+# TypeScript 磁盘索引
+*.tsbuildinfo
+
+# ===================== 别做匹配陷阱 =====================
+web_modules/
+.yarn/cache/
+.yarn/unplugged/

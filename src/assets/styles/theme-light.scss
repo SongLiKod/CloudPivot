@@ -1,0 +1,72 @@
+/**
+ * 浅色模式主题变量
+ * 主色调：白色 + 生态绿
+ * 通过 HTML 根节点 class="theme-light" 生效，切换无需重启应用
+ */
+.theme-light {
+  color-scheme: light;
+
+  /* 品牌色 */
+  --cp-primary: #22c55e;
+  --cp-primary-strong: #16a34a;
+  --cp-primary-soft: #86efac;
+  --cp-primary-bg: #f0fdf4;
+  --cp-primary-bg-hover: #dcfce7;
+  --cp-primary-border: #bbf7d0;
+
+  /* 主色梯度（供 Element Plus / Vant 变量桥接使用） */
+  --cp-primary-light-3: #67d78f;
+  --cp-primary-light-5: #91e3af;
+  --cp-primary-light-7: #baf0ce;
+  --cp-primary-light-8: #d3f6df;
+  --cp-primary-light-9: #ecfbf1;
+  --cp-primary-dark-2: #16a34a;
+
+  /* 背景 */
+  --cp-bg-page: #ffffff;
+  --cp-bg-card: #f9fafb;
+  --cp-bg-elevated: #ffffff;
+  --cp-bg-hover: #f3f4f6;
+  --cp-bg-active: #dcfce7;
+  --cp-bg-mask: rgba(17, 24, 39, 0.45);
+  --cp-bg-sunken: #f3f4f6;
+
+  /* 文字 */
+  --cp-text-primary: #1f2937;
+  --cp-text-regular: #374151;
+  --cp-text-secondary: #6b7280;
+  --cp-text-placeholder: #9ca3af;
+  --cp-text-disabled: #c0c4cc;
+  --cp-text-inverse: #ffffff;
+
+  /* 边框 / 分割线 */
+  --cp-border: #e5e7eb;
+  --cp-border-light: #f0f1f3;
+  --cp-border-strong: #d1d5db;
+
+  /* 语义色 */
+  --cp-success: #22c55e;
+  --cp-success-bg: #f0fdf4;
+  --cp-warning: #f59e0b;
+  --cp-warning-bg: #fffbeb;
+  --cp-danger: #ef4444;
+  --cp-danger-bg: #fef2f2;
+  --cp-info: #6b7280;
+  --cp-info-bg: #f3f4f6;
+  --cp-offline: #9ca3af;
+
+  /* 阴影 */
+  --cp-shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.06);
+  --cp-shadow: 0 4px 16px rgba(17, 24, 39, 0.08);
+  --cp-shadow-lg: 0 12px 32px rgba(17, 24, 39, 0.12);
+
+  /* 图表配色 */
+  --cp-chart-grid: #eef0f3;
+  --cp-chart-axis: #9ca3af;
+  --cp-chart-series-1: #22c55e;
+  --cp-chart-series-2: #16a34a;
+  --cp-chart-series-3: #86efac;
+  --cp-chart-series-4: #f59e0b;
+  --cp-chart-series-5: #60a5fa;
+  --cp-chart-series-6: #a78bfa;
+}

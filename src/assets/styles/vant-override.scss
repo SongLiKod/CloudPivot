@@ -1,0 +1,101 @@
+/**
+ * Vant 4 主题变量覆盖（Android 移动端）
+ * 桥接到 CloudPivot 主题变量，保证浅/深色一致观感
+ */
+@use './variables' as *;
+
+:root.theme-light,
+:root.theme-dark {
+  --van-primary-color: var(--cp-primary);
+  --van-success-color: var(--cp-success);
+  --van-warning-color: var(--cp-warning);
+  --van-danger-color: var(--cp-danger);
+  --van-text-link-color: var(--cp-primary);
+
+  --van-background: var(--cp-bg-page);
+  --van-background-2: var(--cp-bg-elevated);
+  --van-background-3: var(--cp-bg-card);
+
+  --van-text-color: var(--cp-text-primary);
+  --van-text-color-2: var(--cp-text-secondary);
+  --van-text-color-3: var(--cp-text-placeholder);
+
+  --van-border-color: var(--cp-border);
+  --van-active-color: var(--cp-bg-hover);
+  --van-active-opacity: 0.7;
+
+  --van-white: var(--cp-text-inverse);
+  --van-gray-1: var(--cp-bg-card);
+  --van-gray-2: var(--cp-bg-sunken);
+  --van-gray-3: var(--cp-border-light);
+  --van-gray-4: var(--cp-border);
+  --van-gray-5: var(--cp-border-strong);
+  --van-gray-6: var(--cp-text-secondary);
+  --van-gray-7: var(--cp-text-regular);
+  --van-gray-8: var(--cp-text-primary);
+
+  --van-nav-bar-background: var(--cp-bg-elevated);
+  --van-nav-bar-title-text-color: var(--cp-text-primary);
+  --van-nav-bar-icon-color: var(--cp-primary);
+  --van-tabbar-background: var(--cp-bg-elevated);
+  --van-tabbar-item-text-color: var(--cp-text-secondary);
+  --van-tabbar-item-active-color: var(--cp-primary);
+  --van-tabbar-item-height: #{$mobile-tabbar-height};
+
+  --van-cell-background: var(--cp-bg-elevated);
+  --van-cell-text-color: var(--cp-text-primary);
+  --van-cell-value-color: var(--cp-text-secondary);
+  --van-cell-font-size: 14px;
+
+  --van-popup-background: var(--cp-bg-elevated);
+  --van-popup-round-radius: #{$radius-lg};
+
+  --van-button-default-background: var(--cp-bg-elevated);
+  --van-button-default-border-color: var(--cp-border-strong);
+  --van-button-default-color: var(--cp-text-primary);
+  --van-button-primary-background: var(--cp-primary);
+  --van-button-primary-border-color: var(--cp-primary);
+  --van-button-danger-background: var(--cp-danger);
+  --van-button-danger-border-color: var(--cp-danger);
+
+  --van-field-input-text-color: var(--cp-text-primary);
+  --van-field-label-color: var(--cp-text-regular);
+  --van-field-placeholder-text-color: var(--cp-text-placeholder);
+
+  --van-switch-on-background: var(--cp-primary);
+  --van-switch-background: var(--cp-bg-elevated);
+  --van-switch-node-background: #ffffff;
+
+  --van-tag-primary-color: var(--cp-primary);
+  --van-tag-success-color: var(--cp-success);
+  --van-tag-warning-color: var(--cp-warning);
+  --van-tag-danger-color: var(--cp-danger);
+
+  --van-dialog-background: var(--cp-bg-elevated);
+  --van-dialog-header-font-weight: 600;
+
+  --van-toast-background: rgba(17, 24, 39, 0.88);
+
+  --van-loading-spinner-color: var(--cp-primary);
+  --van-empty-description-color: var(--cp-text-secondary);
+  --van-pull-refresh-head-text-color: var(--cp-text-secondary);
+  --van-tab-font-size: 14px;
+  --van-tab-text-color: var(--cp-text-secondary);
+  --van-tab-active-text-color: var(--cp-text-primary);
+  --van-tabs-bottom-bar-color: var(--cp-primary);
+  --van-nav-bar-height: #{$header-height};
+}
+
+/* 触控规范：交互元素最小 44px */
+.theme-dark,
+.theme-light {
+  .van-cell,
+  .van-button--normal,
+  .van-tab {
+    min-height: #{$mobile-touch-min};
+  }
+  .van-cell {
+    display: flex;
+    align-items: center;
+  }
+}

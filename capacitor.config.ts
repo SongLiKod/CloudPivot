@@ -16,6 +16,10 @@ const config: CapacitorConfig = {
     backgroundColor: '#111827'
   },
   plugins: {
+    // 原生 HTTP 桥：Android WebView 直接调用跨域 API 时绕过 CORS / 预检限制
+    CapacitorHttp: {
+      enabled: true
+    },
     StatusBar: {
       style: 'DARK',
       backgroundColor: '#111827'

@@ -430,6 +430,27 @@ export const useAccountStore = defineStore('account', {
       )
     },
 
+    /** 口令重置/主密钥重建后，清除全部已加密凭据并标记需重新配置 */
+    async invalidateCredentials(message = '主密钥已重置，请重新配置 API 凭据') {
+      let changed = false
+      for (const acc of this.accounts) {
+        if (acc.credential?.cipher) {
+          acc.credential = { cipher: '', iv: '', alg: 'AES-GCM', kv: 1 }
+          changed = true
+        }
+        if (acc.status !== 'invalid') {
+          acc.status = 'invalid'
+          acc.statusMessage = message
+          changed = true
+        }
+      }
+      if (changed) {
+        await putMany(STORE.account, this.accounts)
+      }
+      clearCredentialCache()
+      await this.logOperation('account', '口令重置', message, 'warning')
+    },
+
     /** 删除全部失效/异常账号 */
     async removeInvalidAccounts() {
       const invalid = this.accounts.filter((a) => a.status !== 'active' && a.status !== 'unknown')

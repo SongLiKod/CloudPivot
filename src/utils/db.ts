@@ -498,3 +498,13 @@ export async function restoreBackup(
 export async function wipeAllData(): Promise<void> {
   await Promise.all(Object.values(STORE).map((store) => clearStore(store)))
 }
+
+/**
+ * 清空除账号外的全部数据：保留账号、分组与系统配置（含主密钥与设置），
+ * 清除资源缓存 / 操作日志 / 批量任务 / DNS 模板 / 巡检记录，便于重新同步。
+ */
+export async function clearAllExceptAccounts(): Promise<void> {
+  const keep = new Set<string>([STORE.account, STORE.group, STORE.config])
+  const stores = Object.values(STORE).filter((s) => !keep.has(s))
+  await Promise.all(stores.map((store) => clearStore(store)))
+}

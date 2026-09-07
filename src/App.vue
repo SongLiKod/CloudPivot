@@ -1,11 +1,18 @@
 <template>
   <div class="app-shell">
     <router-view />
+    <AppLock v-if="locked" />
+    <RouteLoading />
   </div>
 </template>
 
 <script setup lang="ts">
-// 全局主题已在 main.ts bootstrap 中初始化
+import { computed, ref } from 'vue'
+import AppLock from '@/components/AppLock.vue'
+import RouteLoading from '@/components/RouteLoading.vue'
+import { lockState } from '@/utils/lockService'
+
+const locked = computed(() => lockState.locked)
 </script>
 
 <style scoped lang="scss">

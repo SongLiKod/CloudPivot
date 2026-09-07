@@ -16,6 +16,7 @@ import { useAccountStore } from '@/store/useAccountStore'
 import { useResourceStore } from '@/store/useResourceStore'
 import { useLogStore } from '@/store/useLogStore'
 import { formatTime } from './format'
+import { isLocked } from '@/utils/lockService'
 
 export interface InspectionResult {
   issues: InspectionIssue[]
@@ -135,6 +136,7 @@ let running = false
 
 /** 执行一轮巡检 */
 export async function runInspection(): Promise<InspectionResult> {
+  if (isLocked()) return { issues: [], passed: true }
   if (running) return { issues: [], passed: true }
   running = true
   try {
@@ -163,6 +165,7 @@ export async function runInspection(): Promise<InspectionResult> {
 /** 启动周期巡检 */
 export function startInspectionLoop(intervalMinutes: number): ReturnType<typeof setInterval> {
   const timer = setInterval(() => {
+    if (isLocked()) return
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
     void runInspection()
   }, Math.max(5, intervalMinutes) * 60_000)

@@ -7,12 +7,14 @@
  */
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAccountStore } from '@/store/useAccountStore'
+import { isLocked } from '@/utils/lockService'
 
 let timer: ReturnType<typeof setInterval> | null = null
 let lastRunAt = 0
 
 /** 执行一轮全量同步（带最小间隔防冲击） */
 export async function runAutoSync(force = false): Promise<void> {
+  if (isLocked()) return
   const now = Date.now()
   if (!force && now - lastRunAt < 5_000) return
   const settings = useSettingsStore()

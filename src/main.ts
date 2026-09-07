@@ -21,9 +21,10 @@ import { masterKeyStorage } from '@/utils/db'
 import { useThemeStore } from '@/store/useThemeStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAccountStore } from '@/store/useAccountStore'
-import { startAutoSync, rebuildAutoSync } from '@/utils/syncService'
+import { rebuildAutoSync } from '@/utils/syncService'
 import { runInspection, startInspectionLoop } from '@/utils/inspectionService'
 import { initViewportWatch } from '@/utils/platform'
+import { initLock, isLockActive, whenUnlocked } from '@/utils/lockService'
 
 // 注入主密钥存储通道（IndexedDB）
 registerMasterKeyStorage(masterKeyStorage)
@@ -58,12 +59,15 @@ async function bootstrap() {
   // 主题初始化后重建定时同步（依赖设置）
   rebuildAutoSync()
 
-  try {
-    await accountStore.load()
-    // 首次进入自动做一轮巡检
-    void runInspection()
-  } catch (error) {
-    console.error('[CloudPivot] 账号加载失败', error)
+  // 初始化应用锁；若处于激活状态，先展示锁屏，解锁后再加载数据与巡检
+  await initLock()
+
+  if (isLockActive()) {
+    whenUnlocked(() => {
+      void initializeData()
+    })
+  } else {
+    await initializeData()
   }
 
   // 周期性巡检（随设置启停）
@@ -81,6 +85,18 @@ async function bootstrap() {
   })
 
   void inspectionTimer
+}
+
+/** 解锁后（或未启用锁时）加载账号数据并做首轮巡检 */
+async function initializeData() {
+  const accountStore = useAccountStore()
+  try {
+    await accountStore.load()
+    // 首次进入自动做一轮巡检
+    void runInspection()
+  } catch (error) {
+    console.error('[CloudPivot] 账号加载失败', error)
+  }
 }
 
 void bootstrap()

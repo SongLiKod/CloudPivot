@@ -357,6 +357,16 @@ export const useResourceStore = defineStore('resource', {
       this.waf.rows = filter(this.waf.rows)
       const db = await import('@/utils/db')
       await db.deleteAccountCache(accountId)
+    },
+
+    /** 重置全部资源聚合状态（清空内存行，配合本地缓存清除后重新同步） */
+    resetAll() {
+      this.zones = emptyState<CfZone>()
+      this.dns = emptyState<CfDnsRecord>()
+      this.workers = emptyState<CfWorkerScript>()
+      this.workerRoutes = emptyState<CfWorkerRoute>()
+      this.pages = emptyState<CfPagesProject>()
+      this.waf = emptyState<CfAccessRule & { __zoneId?: string; __zoneName?: string }>()
     }
   }
 })

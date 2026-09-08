@@ -55,6 +55,9 @@ add_subdirectory("runner")
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
+# flutter_inappwebview_windows 使用 MSVC <experimental/coroutine>（/await），
+# 新版 MSVC 将其升级为硬错误（STL1011），为依赖它的插件目标取消该报错。
+add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
 include(flutter/generated_plugins.cmake)
 
 

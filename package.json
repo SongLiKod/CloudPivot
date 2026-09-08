@@ -40,6 +40,7 @@
     "@emailjs/browser": "^4.4.1",
     "axios": "^1.7.9",
     "echarts": "^5.6.0",
+    "electron-updater": "^6.8.9",
     "element-plus": "^2.9.3",
     "idb": "^8.0.1",
     "jspdf": "^2.5.2",
@@ -58,10 +59,10 @@
     "electron": "^33.3.1",
     "electron-builder": "^25.1.8",
     "sass": "^1.83.4",
+    "sharp": "^0.33.5",
     "typescript": "^5.7.3",
     "vite": "^6.0.7",
-    "vue-tsc": "^2.2.0",
-    "sharp": "^0.33.5"
+    "vue-tsc": "^2.2.0"
   },
   "build": {
     "appId": "com.cloudpivot.app",
@@ -73,6 +74,12 @@
       "dist/**/*",
       "electron/**/*"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "SongLiKod",
+      "repo": "CloudPivot",
+      "releaseType": "release"
+    },
     "win": {
       "icon": "electron/assets/icon.ico",
       "target": [

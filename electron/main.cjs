@@ -8,11 +8,68 @@
 const { app, BrowserWindow, ipcMain, dialog, nativeTheme, net } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
+const { autoUpdater } = require('electron-updater')
 
 /** 窗口不写入频繁内存交换导致的闪烁 */
 const PRELOAD = path.join(__dirname, 'preload.cjs')
 
 let mainWindow = null
+
+/* ------------------------------------------------------------------ */
+/* 自动更新配置                                                         */
+/* ------------------------------------------------------------------ */
+let updateStatus = {
+  checking: false,
+  available: false,
+  downloading: false,
+  downloaded: false,
+  error: null,
+  version: null,
+  progress: 0
+}
+
+function sendUpdateStatus(status) {
+  updateStatus = { ...updateStatus, ...status }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update:status', updateStatus)
+  }
+}
+
+function initAutoUpdater() {
+  // 配置 GitHub 发布源
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'SongLiKod',
+    repo: 'CloudPivot'
+  })
+
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('checking-for-update', () => {
+    sendUpdateStatus({ checking: true, error: null })
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    sendUpdateStatus({ checking: false, available: true, version: info.version })
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    sendUpdateStatus({ checking: false, available: false })
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    sendUpdateStatus({ downloading: true, progress: progress.percent })
+  })
+
+  autoUpdater.on('update-downloaded', () => {
+    sendUpdateStatus({ downloading: false, downloaded: true })
+  })
+
+  autoUpdater.on('error', (err) => {
+    sendUpdateStatus({ checking: false, error: err.message })
+  })
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -167,10 +224,45 @@ ipcMain.handle('email:send', async (_event, opts) => {
 })
 
 /* ------------------------------------------------------------------ */
+/* IPC：自动更新                                                         */
+/* ------------------------------------------------------------------ */
+ipcMain.handle('update:check', async () => {
+  try {
+    await autoUpdater.checkForUpdates()
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('update:download', async () => {
+  try {
+    await autoUpdater.downloadUpdate()
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('update:install', () => {
+  autoUpdater.quitAndInstall(false, true)
+})
+
+ipcMain.handle('update:getStatus', () => {
+  return updateStatus
+})
+
+/* ------------------------------------------------------------------ */
 /* 生命周期                                                             */
 /* ------------------------------------------------------------------ */
 app.whenReady().then(() => {
+  initAutoUpdater()
   createWindow()
+
+  // 启动后延迟检查更新（避免阻塞启动）
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(() => {})
+  }, 3000)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

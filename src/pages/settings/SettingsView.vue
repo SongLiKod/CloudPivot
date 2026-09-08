@@ -326,7 +326,15 @@
         <div class="about-item" v-if="isDesktop"><span>Electron</span><b class="cp-mono">{{ electronVersions?.electron ?? '未知' }}</b></div>
         <div class="about-item"><span>数据存储</span><b>IndexedDB（本机私有化）</b></div>
       </div>
+      <div class="about-actions">
+        <el-button type="primary" plain @click="showUpdateDialog = true">
+          <el-icon><Download /></el-icon>检查更新
+        </el-button>
+      </div>
     </div>
+
+    <!-- 更新对话框 -->
+    <UpdateDialog v-model="showUpdateDialog" />
 
     <!-- 设置 / 修改口令 -->
     <el-dialog
@@ -360,8 +368,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Files, InfoFilled, Lock, Message, Monitor, Odometer, Setting, Sunny, WarningFilled } from '@element-plus/icons-vue'
+import { Download, Files, InfoFilled, Lock, Message, Monitor, Odometer, Setting, Sunny, WarningFilled } from '@element-plus/icons-vue'
 import { isElectron, usePlatform } from '@/utils/platform'
+import UpdateDialog from '@/components/UpdateDialog.vue'
 import { useThemeStore } from '@/store/useThemeStore'
 import { useSettingsStore, SYNC_INTERVAL_OPTIONS } from '@/store/useSettingsStore'
 import { useAccountStore } from '@/store/useAccountStore'
@@ -371,6 +380,7 @@ import { resetMasterKeySession } from '@/utils/crypto'
 import { useResourceStore } from '@/store/useResourceStore'
 
 const appVersion = __APP_VERSION__
+const showUpdateDialog = ref(false)
 
 import {
   lockState,
@@ -899,5 +909,11 @@ onMounted(async () => {
     font-size: 13px;
     word-break: break-all;
   }
+}
+
+.about-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

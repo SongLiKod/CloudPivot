@@ -53,8 +53,26 @@ interface CloudPivotDesktopBridge {
       params: Record<string, string>
     }) => Promise<boolean>
   }
+  /** 自动更新 */
+  update: {
+    check: () => Promise<{ success: boolean; error?: string }>
+    download: () => Promise<{ success: boolean; error?: string }>
+    install: () => Promise<void>
+    getStatus: () => Promise<UpdateStatus>
+    onStatusChange: (callback: (status: UpdateStatus) => void) => void
+  }
   /** 主题：通知主进程同步原生窗口外观 */
   setNativeTheme: (theme: 'light' | 'dark') => void
+}
+
+interface UpdateStatus {
+  checking: boolean
+  available: boolean
+  downloading: boolean
+  downloaded: boolean
+  error: string | null
+  version: string | null
+  progress: number
 }
 
 interface Window {

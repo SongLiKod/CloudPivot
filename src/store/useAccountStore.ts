@@ -204,7 +204,21 @@ export const useAccountStore = defineStore('account', {
     async verifyCredential(
       account: CloudflareAccount
     ): Promise<AccountVerifyResult> {
-      const ctx = await buildRequestContext(account)
+      let ctx: CfRequestContext
+      try {
+        ctx = await buildRequestContext(account)
+      } catch (error) {
+        return { ok: false, status: 'invalid', statusMessage: (error as Error).message }
+      }
+
+      // 检查凭据是否为空
+      const cred = ctx.credential
+      if (cred.authType === 'token' && !cred.token) {
+        return { ok: false, status: 'invalid', statusMessage: 'API Token 未配置' }
+      }
+      if (cred.authType === 'globalKey' && (!cred.email || !cred.globalKey)) {
+        return { ok: false, status: 'invalid', statusMessage: '邮箱或 Global Key 未配置' }
+      }
 
       // Global Key：/user 一次完成校验与账号归属
       if (account.authType === 'globalKey') {
@@ -354,6 +368,58 @@ export const useAccountStore = defineStore('account', {
       if (!account) return
       const updated = { ...account, ...patch, updatedAt: Date.now() }
       await this.persistAccount(updated)
+    },
+
+    /** 更新账号（含凭据） */
+    async updateAccount(accountId: string, input: Partial<AccountCreateInput>): Promise<{ ok: boolean; message?: string }> {
+      const account = this.accounts.find((a) => a.id === accountId)
+      if (!account) return { ok: false, message: '账号不存在' }
+
+      const updated: CloudflareAccount = { ...account, updatedAt: Date.now() }
+
+      if (input.name !== undefined) updated.name = input.name.trim()
+      if (input.remark !== undefined) updated.remark = input.remark
+      if (input.tags !== undefined) updated.tags = [...input.tags]
+      if (input.groupId !== undefined) updated.groupId = input.groupId
+
+      // 只有当凭据字段有实际值时才更新（空值表示不修改）
+      const hasTokenInput = input.token && input.token.trim()
+      const hasEmailInput = input.email && input.email.trim()
+      const hasGlobalKeyInput = input.globalKey && input.globalKey.trim()
+      const needUpdateCredential = hasTokenInput || hasEmailInput || hasGlobalKeyInput
+
+      if (needUpdateCredential) {
+        const authType = input.authType ?? account.authType
+        let plain: string
+        let identity: string
+        const credential: AccountCredential = { authType }
+
+        if (authType === 'token') {
+          const token = input.token?.trim() ?? ''
+          if (!token) return { ok: false, message: '请填写 API Token' }
+          plain = token
+          identity = token.slice(0, 6) + '****' + token.slice(-4)
+          credential.token = token
+        } else {
+          const email = input.email?.trim() ?? ''
+          const globalKey = input.globalKey?.trim() ?? ''
+          if (!email || !globalKey) return { ok: false, message: '请填写邮箱与 Global API Key' }
+          plain = JSON.stringify({ authType: 'globalKey', email, globalKey })
+          identity = email
+          credential.email = email
+          credential.globalKey = globalKey
+        }
+
+        const encrypted = await encryptText(plain)
+        updated.authType = authType
+        updated.identity = identity
+        updated.credential = encrypted
+        clearCredentialCache(accountId)
+        cacheCredential(accountId, credential)
+      }
+
+      await this.persistAccount(updated)
+      return { ok: true }
     },
 
     /** 重新检测账号状态 */
@@ -566,15 +632,31 @@ export const useAccountStore = defineStore('account', {
     },
 
     /** 一键刷新全部账号（并发受限） */
-    async refreshAll() {
+    async refreshAll(): Promise<{ success: string[]; failed: string[] }> {
       const ids = this.accounts.map((a) => a.id)
+      const success: string[] = []
+      const failed: string[] = []
       this.loading = true
       try {
-        await runWithConcurrency(ids, 4, (id) => this.refreshAccount(id))
+        const results = await runWithConcurrency(ids, 4, async (id) => {
+          const account = this.accounts.find((a) => a.id === id)
+          const result = await this.refreshAccount(id)
+          return { name: account?.name || id, ok: result !== null }
+        })
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value.ok) {
+            success.push(r.value.name)
+          } else {
+            const reason = r.status === 'rejected' ? r.reason : null
+            const name = (r as PromiseFulfilledResult<{ name: string; ok: boolean }>).value?.name || '未知账号'
+            failed.push(name)
+          }
+        }
         this.lastSyncAt = Date.now()
       } finally {
         this.loading = false
       }
+      return { success, failed }
     },
 
     /* ------------------------------------------------------------ */

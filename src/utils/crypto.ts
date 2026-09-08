@@ -168,8 +168,10 @@ async function getCurrentWrapperContext(): Promise<{ mode: MasterKeyLockMode; se
 /**
  * 主密钥自身也使用包装密钥（device secret 或口令派生）加密后保存，
  * 形成"随机密钥 + 本地密文"的双层保护，防止直接读取 IndexedDB 得到可用密钥。
+ * 
+ * @param allowCreate - 是否允许在主密钥不存在或损坏时自动创建新密钥（默认 true）
  */
-async function loadOrCreateMasterKey(): Promise<CryptoKey> {
+async function loadOrCreateMasterKey(allowCreate = true): Promise<CryptoKey> {
   if (cachedKey) return cachedKey
 
   const subtle = getSubtle()
@@ -185,16 +187,25 @@ async function loadOrCreateMasterKey(): Promise<CryptoKey> {
         fromBase64(stored.cipher) as BufferSource
       )
       const raw = new Uint8Array(plainBytes)
-      cachedKey = await subtle.importKey('raw', raw, ALG, false, ['encrypt', 'decrypt'])
+    cachedKey = await subtle.importKey('raw', raw as BufferSource, ALG, false, ['encrypt', 'decrypt'])
       raw.fill(0)
       return cachedKey
     } catch {
       // 密文与当前包装密钥不匹配（如备份文件来自其它设备）
-      throw new Error('本地主密钥校验失败：数据可能来自其它设备，或本地密钥存储已损坏。')
+      if (!allowCreate) {
+        throw new Error('主密钥校验失败：数据可能来自其它设备，或本地密钥存储已损坏。')
+      }
+      // 生成新主密钥并覆盖损坏的旧密钥，已导入的凭据将无法解密但新操作可继续
+      console.warn('主密钥校验失败，将生成新主密钥。已导入的凭据需要重新配置。')
+      // 继续执行下方的"首次运行"逻辑
     }
   }
 
-  // 首次运行：生成主密钥并使用当前包装密钥落盘
+  if (!allowCreate) {
+    throw new Error('主密钥不存在')
+  }
+
+  // 首次运行或主密钥损坏：生成主密钥并使用当前包装密钥落盘
   const rawMaster = globalThis.crypto.getRandomValues(new Uint8Array(32))
   cachedKey = await subtle.importKey('raw', rawMaster, ALG, false, ['encrypt', 'decrypt'])
 
@@ -337,6 +348,69 @@ export function resetMasterKeySession(): void {
   cachedKey = null
 }
 
+/**
+ * 解包当前主密钥并返回原始字节的 base64（用于含密钥备份导出）。
+ * 备份中携带原始主密钥后，可在任意设备还原（导入时用本机包装密钥重新落盘）。
+ * 本机主密钥不存在或无法解包时返回 null。
+ */
+export async function unwrapMasterKeyRaw(): Promise<string | null> {
+  const subtle = getSubtle()
+  const stored = masterKeyProvider ? await masterKeyProvider() : null
+  if (!stored?.cipher || !stored?.iv) return null
+  try {
+    const ctx = await getCurrentWrapperContext()
+    const wrapperKey = await deriveWrapperKey(ctx.secret, ctx.mode)
+    const plain = await subtle.decrypt(
+      { name: ALG, iv: fromBase64(stored.iv) as BufferSource },
+      wrapperKey,
+      fromBase64(stored.cipher) as BufferSource
+    )
+    const raw = new Uint8Array(plain)
+    if (raw.length !== 32) {
+      raw.fill(0)
+      return null
+    }
+    const b64 = toBase64(raw)
+    raw.fill(0)
+    return b64
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 从备份中的原始主密钥（base64）恢复会话主密钥，
+ * 并使用当前设备的包装密钥重新包装后落盘（覆盖 __master_key__）。
+ * 用于备份还原：使备份凭据在本机可解密。
+ */
+export async function importMasterKeyRaw(rawBase64: string): Promise<void> {
+  const subtle = getSubtle()
+  const raw = fromBase64(rawBase64)
+  if (raw.length !== 32) {
+    raw.fill(0)
+    throw new Error('备份中的主密钥格式不正确')
+  }
+  try {
+    // 先用当前包装密钥重新包装并落盘，再建立会话密钥，最后清零原始字节
+    if (masterKeyPersister) {
+      const ctx = await getCurrentWrapperContext()
+      const wrapperKey = await deriveWrapperKey(ctx.secret, ctx.mode)
+      const iv = globalThis.crypto.getRandomValues(new Uint8Array(IV_BYTES))
+      const wrapped = await subtle.encrypt({ name: ALG, iv }, wrapperKey, raw as BufferSource)
+      await masterKeyPersister({
+        cipher: toBase64(wrapped),
+        iv: toBase64(iv),
+        alg: ALG,
+        kv: KEY_VERSION
+      })
+      if (wrapModeProvider) await wrapModeProvider.save(ctx.mode)
+    }
+    cachedKey = await subtle.importKey('raw', raw as BufferSource, ALG, false, ['encrypt', 'decrypt'])
+  } finally {
+    raw.fill(0)
+  }
+}
+
 /** 加密任意可序列化数据，返回密文载荷 */
 export async function encryptJSON<T>(data: T): Promise<EncryptedPayload> {
   const subtle = getSubtle()
@@ -355,9 +429,9 @@ export async function encryptText(text: string): Promise<EncryptedPayload> {
 }
 
 /** 解密载荷，返回原始 JSON */
-export async function decryptJSON<T>(payload: EncryptedPayload): Promise<T> {
+export async function decryptJSON<T>(payload: EncryptedPayload, allowCreate = true): Promise<T> {
   const subtle = getSubtle()
-  const key = await loadOrCreateMasterKey()
+  const key = await loadOrCreateMasterKey(allowCreate)
   if (!payload?.cipher || !payload?.iv) {
     throw new Error('加密数据格式不正确')
   }
@@ -370,8 +444,8 @@ export async function decryptJSON<T>(payload: EncryptedPayload): Promise<T> {
 }
 
 /** 解密字符串 */
-export async function decryptText(payload: EncryptedPayload): Promise<string> {
-  const data = await decryptJSON<{ __t: string; v: string }>(payload)
+export async function decryptText(payload: EncryptedPayload, allowCreate = true): Promise<string> {
+  const data = await decryptJSON<{ __t: string; v: string }>(payload, allowCreate)
   return data?.v ?? ''
 }
 

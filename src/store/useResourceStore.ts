@@ -133,7 +133,8 @@ export const useResourceStore = defineStore('resource', {
           .filter((r) => r.status === 'rejected')
           .map((r) => (r as PromiseRejectedResult).reason as Error)
         if (zoneFailures.length) {
-          this.zones.error = zoneFailures.map((e) => e.message).join('；')
+          const uniqueErrors = [...new Set(zoneFailures.map((e) => e.message))]
+          this.zones.error = uniqueErrors.join('；')
         } else {
           this.zones.error = undefined
         }
@@ -229,7 +230,8 @@ export const useResourceStore = defineStore('resource', {
             .filter((r) => r.status === 'rejected')
             .map((r) => (r as PromiseRejectedResult).reason as Error)
           if (failures.length) {
-            this.dns.error = failures.map((e) => e.message).join('；')
+            const uniqueErrors = [...new Set(failures.map((e) => e.message))]
+            this.dns.error = uniqueErrors.join('；')
           } else {
             this.dns.error = undefined
           }

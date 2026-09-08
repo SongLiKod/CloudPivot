@@ -157,6 +157,7 @@
           <span class="cp-text-sm cp-text-secondary">不含密钥的备份仅能还原账号结构，凭据需重新填写</span>
         </div>
         <div class="setting-row__action">
+          <el-checkbox v-model="restoreIncludeCredentials">导入密钥</el-checkbox>
           <el-checkbox v-model="restoreOverwriteLogs">覆盖日志</el-checkbox>
           <el-button :loading="restoring" @click="doRestore">选择文件还原</el-button>
         </div>
@@ -369,6 +370,7 @@ import { useLogStore } from '@/store/useLogStore'
 import { createBackup, restoreBackup, clearAllExceptAccounts, wipeAllData } from '@/utils/db'
 import { resetMasterKeySession } from '@/utils/crypto'
 import { useResourceStore } from '@/store/useResourceStore'
+import { purgeSessionCredentials } from '@/store/credentialService'
 
 const appVersion = __APP_VERSION__
 
@@ -406,6 +408,7 @@ async function onThemeModeChange(mode: string | number | boolean | undefined) {
 
 /* ---------------- 备份 / 还原 ---------------- */
 const backupIncludeCredentials = ref(true)
+const restoreIncludeCredentials = ref(true)
 const restoreOverwriteLogs = ref(false)
 const backuping = ref(false)
 const restoring = ref(false)
@@ -491,18 +494,36 @@ async function applyRestore(content: string) {
   restoring.value = true
   try {
     const payload = JSON.parse(content) as BackupPayload
-    const result = await restoreBackup(payload, { overwriteLogs: restoreOverwriteLogs.value })
+    const result = await restoreBackup(payload, { overwriteLogs: restoreOverwriteLogs.value, includeCredentials: restoreIncludeCredentials.value })
     // 备份可能写入新的 __master_key__，重置会话主密钥使其与磁盘状态一致
     await resetMasterKeySession()
+    purgeSessionCredentials()
     accountStore.loaded = false
     await accountStore.load()
     await settingsStore.init()
-    ElMessage.success(`还原成功：账号 ${result.accounts} / 分组 ${result.groups} / 模板 ${result.templates}`)
+
+    let msg = `还原成功：账号 ${result.accounts} / 分组 ${result.groups} / 模板 ${result.templates}`
+    if (result.successAccounts.length) {
+      msg += `\n✓ 密钥可用：${result.successAccounts.join('、')}`
+    }
+    if (result.failedAccounts.length) {
+      msg += `\n✗ 密钥失败：${result.failedAccounts.join('、')}`
+    }
+
+    if (result.failedAccounts.length) {
+      ElMessageBox.alert(msg, '还原完成（部分账号密钥失败）', {
+        type: 'warning',
+        confirmButtonText: '确定'
+      })
+    } else {
+      ElMessage.success(msg)
+    }
+
     await logStore.write({
       module: 'system',
       action: '还原备份',
-      detail: `从备份还原：账号 ${result.accounts}，分组 ${result.groups}，模板 ${result.templates}`,
-      level: 'warning'
+      detail: `从备份还原：账号 ${result.accounts}，分组 ${result.groups}，模板 ${result.templates}，密钥成功 ${result.successAccounts.length}，失败 ${result.failedAccounts.length}`,
+      level: result.failedAccounts.length ? 'warning' : 'success'
     })
   } catch (error) {
     ElMessage.error((error as Error).message)

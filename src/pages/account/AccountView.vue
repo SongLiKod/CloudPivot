@@ -84,7 +84,7 @@
             <el-button><el-icon><MoreFilled /></el-icon></el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item @click="exportBackup">导出备份（含密钥）</el-dropdown-item>
+                <el-dropdown-item @click="exportBackup(true)">导出备份（含密钥）</el-dropdown-item>
                 <el-dropdown-item @click="exportBackup(false)">导出备份（不含密钥）</el-dropdown-item>
                 <el-dropdown-item @click="openImport">导入备份还原</el-dropdown-item>
               </el-dropdown-menu>
@@ -251,6 +251,17 @@
       </template>
     </el-dialog>
 
+    <!-- 导入备份选项 -->
+    <el-dialog v-model="importDialogVisible" title="导入备份" width="380px" :append-to-body="true" @close="importPayload = null">
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <el-checkbox v-model="importIncludeCredentials">导入密钥（勾选后还原账号凭据与主密钥）</el-checkbox>
+      </div>
+      <template #footer>
+        <el-button @click="importDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmImport">确认还原</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 导入备份 -->
     <input ref="importInput" type="file" accept=".json,application/json" style="display: none" @change="onImportFile" />
   </div>
@@ -262,6 +273,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePlatform } from '@/utils/platform'
 import { useAccountStore } from '@/store/useAccountStore'
 import { useLogStore } from '@/store/useLogStore'
+import { resolveCredential, purgeSessionCredentials } from '@/store/credentialService'
 import { createBackup, restoreBackup } from '@/utils/db'
 import { downloadBlob } from '@/utils/format'
 import { formatRelative } from '@/utils/format'
@@ -366,7 +378,7 @@ function openAddDialog() {
   dialogVisible.value = true
 }
 
-function openEditDialog(account: CloudflareAccount) {
+async function openEditDialog(account: CloudflareAccount) {
   editId.value = account.id
   form.name = account.name
   form.authType = account.authType
@@ -375,6 +387,20 @@ function openEditDialog(account: CloudflareAccount) {
   form.globalKey = ''
   form.remark = account.remark ?? ''
   form.groupId = account.groupId
+
+  // 尝试解密并回填已有凭据
+  try {
+    const credential = await resolveCredential(account)
+    if (account.authType === 'token') {
+      form.token = credential.token ?? ''
+    } else {
+      form.email = credential.email ?? ''
+      form.globalKey = credential.globalKey ?? ''
+    }
+  } catch {
+    // 解密失败时保持空值，用户可重新填写
+  }
+
   dialogVisible.value = true
 }
 
@@ -409,13 +435,21 @@ async function saveDialog() {
   saving.value = true
   try {
     if (editId.value) {
-      await accountStore.updateAccountMeta(editId.value, {
+      const result = await accountStore.updateAccount(editId.value, {
         name: form.name,
         remark: form.remark,
-        tags: form.tags
+        tags: form.tags,
+        authType: form.authType,
+        token: form.token,
+        email: form.email,
+        globalKey: form.globalKey
       })
-      ElMessage.success('已保存')
-      dialogVisible.value = false
+      if (result.ok) {
+        ElMessage.success('已保存')
+        dialogVisible.value = false
+      } else {
+        ElMessage.error(result.message ?? '保存失败')
+      }
     } else {
       const result = await accountStore.addAccount({ ...form })
       if (result.ok) {
@@ -451,8 +485,21 @@ async function refreshAccount(account: CloudflareAccount) {
 async function onRefreshAll() {
   refreshing.value = true
   try {
-    if (accountStore.accounts.length) await accountStore.refreshAll()
-    else ElMessage.info('暂无账号')
+    if (accountStore.accounts.length) {
+      const result = await accountStore.refreshAll()
+      let msg = `刷新完成：成功 ${result.success.length} 个`
+      if (result.success.length) {
+        msg += `（${result.success.join('、')}）`
+      }
+      if (result.failed.length) {
+        msg += `，失败 ${result.failed.length} 个（${result.failed.join('、')}）`
+        ElMessage.warning(msg)
+      } else {
+        ElMessage.success(msg)
+      }
+    } else {
+      ElMessage.info('暂无账号')
+    }
   } finally {
     refreshing.value = false
   }
@@ -580,6 +627,10 @@ function openImport() {
   importInput.value?.click()
 }
 
+const importDialogVisible = ref(false)
+const importIncludeCredentials = ref(true)
+const importPayload = ref<any>(null)
+
 async function onImportFile(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
@@ -588,19 +639,50 @@ async function onImportFile(event: Event) {
   try {
     const text = await file.text()
     const payload = JSON.parse(text)
-    const result = await restoreBackup(payload)
-    // 重新加载账号与分组
+    importPayload.value = payload
+    importIncludeCredentials.value = payload.includeCredentials ?? true
+    importDialogVisible.value = true
+  } catch (error) {
+    ElMessage.error(`导入失败：${(error as Error).message}`)
+  }
+}
+
+async function confirmImport() {
+  if (!importPayload.value) return
+  importDialogVisible.value = false
+  try {
+    const result = await restoreBackup(importPayload.value, { includeCredentials: importIncludeCredentials.value })
+    purgeSessionCredentials()
     accountStore.loaded = false
     await accountStore.load()
-    ElMessage.success(`还原成功：账号 ${result.accounts}、分组 ${result.groups}、模板 ${result.templates}`)
+
+    let msg = `还原成功：账号 ${result.accounts}、分组 ${result.groups}、模板 ${result.templates}`
+    if (result.successAccounts.length) {
+      msg += `\n✓ 密钥可用：${result.successAccounts.join('、')}`
+    }
+    if (result.failedAccounts.length) {
+      msg += `\n✗ 密钥失败：${result.failedAccounts.join('、')}`
+    }
+
+    if (result.failedAccounts.length) {
+      ElMessageBox.alert(msg, '还原完成（部分账号密钥失败）', {
+        type: 'warning',
+        confirmButtonText: '确定'
+      })
+    } else {
+      ElMessage.success(msg)
+    }
+
     await logStore.write({
       module: 'account',
       action: '导入还原',
-      detail: `从备份文件还原 ${result.accounts} 个账号`,
-      level: 'success'
+      detail: `从备份文件还原 ${result.accounts} 个账号（${importIncludeCredentials.value ? '含密钥' : '不含密钥'}），成功 ${result.successAccounts.length}，失败 ${result.failedAccounts.length}`,
+      level: result.failedAccounts.length ? 'warning' : 'success'
     })
   } catch (error) {
     ElMessage.error(`导入失败：${(error as Error).message}`)
+  } finally {
+    importPayload.value = null
   }
 }
 

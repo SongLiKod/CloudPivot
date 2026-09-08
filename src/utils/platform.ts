@@ -1,30 +1,18 @@
 /**
  * 平台与形态探测
- * - Windows 桌面：Capacitor-Electron 打包，走 Element Plus
- * - Android 移动端：Capacitor-Android 打包，走 Vant4
- * - 浏览器开发环境：按视口宽度自动降级，便于调试双端形态
+ *
+ * 已移除 Electron / Capacitor 外壳，改由 Flutter(WebView) 承载：
+ * - Flutter 客户端内即为普通 Web 形态（无原生桥），按视口宽度自动切换桌面/移动端布局
+ * - 桌面（Windows WebView2）与移动（Android WebView）共用同一套响应式代码
  */
-import { Capacitor } from '@capacitor/core'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
-export type PlatformKind = 'electron' | 'android' | 'web'
+export type PlatformKind = 'web' | 'electron' | 'android'
 
 const MOBILE_BREAKPOINT = 768
 
-/** 是否为 Electron 桌面壳（由 preload 注入 window.cloudpivot 判定） */
-export const isElectron = typeof window !== 'undefined' && !!window.cloudpivot
-
-/** Capacitor 原生平台标识 */
-const nativePlatform = Capacitor.getPlatform() as string
-
-export const platformKind: PlatformKind = isElectron
-  ? 'electron'
-  : nativePlatform === 'android'
-    ? 'android'
-    : 'web'
-
-/** 原生 Android 端 */
-export const isAndroid = platformKind === 'android'
+/** 应用运行形态：WebView 内一律视为 Web */
+export const platformKind: PlatformKind = 'web'
 
 /** 视口宽度（响应式） */
 export const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
@@ -50,12 +38,10 @@ export function destroyViewportWatch() {
 }
 
 /**
- * 是否使用移动端形态：原生 Android，或视口 <= 768px
+ * 是否使用移动端形态：视口 <= 768px
  * 用于在同一套页面代码中切换 Element Plus / Vant 组件
  */
-export const isMobile = computed(
-  () => platformKind === 'android' || viewportWidth.value <= MOBILE_BREAKPOINT
-)
+export const isMobile = computed(() => viewportWidth.value <= MOBILE_BREAKPOINT)
 
 export const isDesktop = computed(() => !isMobile.value)
 
@@ -68,5 +54,5 @@ export function usePlatform() {
   onBeforeUnmount(() => {
     // 视口监听为全局单例，组件卸载不销毁，避免频繁增删
   })
-  return { platformKind, isElectron, isAndroid, isMobile, isDesktop, isLandscape, viewportWidth }
+  return { platformKind, isMobile, isDesktop, isLandscape, viewportWidth }
 }

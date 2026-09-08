@@ -545,18 +545,8 @@ async function exportBackup(includeCredentials = true) {
   try {
     const payload = await createBackup(includeCredentials)
     const text = JSON.stringify(payload, null, 2)
-    const bridge = window.cloudpivot
-    if (bridge?.fs?.saveFile) {
-      const saved = await bridge.fs.saveFile({
-        defaultPath: `cloudpivot-backup-${new Date().toISOString().slice(0, 10)}.json`,
-        content: text,
-        filters: [{ name: 'JSON', extensions: ['json'] }]
-      })
-      if (saved) ElMessage.success(`已导出：${saved}`)
-    } else {
-      downloadBlob(new Blob([text], { type: 'application/json' }), `cloudpivot-backup-${new Date().toISOString().slice(0, 10)}.json`)
-      ElMessage.success('备份已导出')
-    }
+    downloadBlob(new Blob([text], { type: 'application/json' }), `cloudpivot-backup-${new Date().toISOString().slice(0, 10)}.json`)
+    ElMessage.success('备份已导出')
     await logStore.write({
       module: 'account',
       action: '导出备份',

@@ -14,19 +14,18 @@ import axios, {
   type InternalAxiosRequestConfig
 } from 'axios'
 import type { AccountCredential, CfResponse } from '@/types'
-import { isAndroid, isElectron } from '@/utils/platform'
 import { globalGate, isRetryableError } from '@/utils/scheduler'
 import { sleep } from '@/utils/format'
 
-const DIRECT_CF_API_BASE = 'https://api.cloudflare.com/client/v4'
 const WEB_CF_API_BASE = '/cf-api'
 
 /**
- * Web 形态（浏览器开发 / preview）直连 Cloudflare 会被 CORS 拦截，
- * 故走 dev server 相对路径代理；Electron / Android 原生壳无同源限制，直连官方接口。
+ * 统一走相对路径 /cf-api：
+ * - 开发环境由 vite 代理转发
+ * - Flutter(WebView) 客户端由内置本地服务转发，规避跨域
+ * - 纯静态托管需自行配置反向代理
  */
-export const CF_API_BASE =
-  typeof window !== 'undefined' && !isElectron && !isAndroid ? WEB_CF_API_BASE : DIRECT_CF_API_BASE
+export const CF_API_BASE = WEB_CF_API_BASE
 
 /** 归一化后的 API 错误 */
 export class CfApiError extends Error {

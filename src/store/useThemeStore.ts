@@ -4,12 +4,10 @@
  * 模式：system（跟随系统，默认）/ light / dark
  * - 通过修改 HTML 根节点 class 切换 `theme-light` / `theme-dark`
  * - system 模式监听系统配色偏好并即时响应
- * - Electron 主进程同步原生窗口外观（setNativeTheme）
  * - 持久化：IndexedDB system_config_table（含 localStorage 快速缓存防闪烁）
  */
 import { defineStore } from 'pinia'
 import { getConfig, setConfig } from '@/utils/db'
-import { isElectron } from '@/utils/platform'
 import type { ResolvedTheme, ThemeMode } from '@/types'
 
 const THEME_MODE_KEY = 'themeMode'
@@ -61,11 +59,6 @@ export const useThemeStore = defineStore('theme', {
       root.classList.remove('theme-light', 'theme-dark')
       root.classList.add(theme === 'dark' ? 'theme-dark' : 'theme-light')
       root.style.colorScheme = theme
-
-      // 同步原生端外观
-      if (isElectron && window.cloudpivot) {
-        window.cloudpivot.setNativeTheme(theme)
-      }
 
       // 同步 meta theme-color
       const meta = document.querySelector('meta[name="theme-color"]')

@@ -22,20 +22,13 @@ release/
 vite.config.ts.*.tmp*
 *.log
 
-# ===================== Electron =====================
-electron/dist/
-electron/bin/
-*.exe
-*.dll
-*.pdb
-
-# ===================== Capacitor / Android / iOS =====================
-android/
-ios/
-# 仅在需要提交原生工程时移除以下注释
-# !android/app/src/main/assets
-.capacitor/
-capacitor-cordova-android-plugins/
+# ===================== Flutter =====================
+flutter_app/build/
+flutter_app/.dart_tool/
+flutter_app/.flutter-plugins*
+flutter_app/android/key.properties
+flutter_app/android/*.jks
+flutter_app/.idea/
 
 # ===================== 测试与覆盖率 =====================
 coverage/

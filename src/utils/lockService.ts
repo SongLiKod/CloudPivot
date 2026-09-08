@@ -16,8 +16,6 @@ import {
   registerMasterKeyWrapModeStorage,
   type MasterKeyLockMode
 } from '@/utils/crypto'
-import { App as CapacitorApp } from '@capacitor/app'
-import { isAndroid, isElectron } from '@/utils/platform'
 import { purgeSessionCredentials } from '@/store/credentialService'
 
 const LOCK_CONFIG_KEY = '__app_lock__'
@@ -392,18 +390,9 @@ function registerVisibilityAutoLock() {
 }
 
 function registerBlurAutoLock() {
-  if (!isElectron || typeof window === 'undefined') return
+  if (typeof window === 'undefined') return
   window.addEventListener('blur', () => {
     if (lockState.enabled && lockState.autoLockOnBlur && !lockState.locked) lock()
-  })
-}
-
-function registerAndroidAutoLock() {
-  if (!isAndroid) return
-  void CapacitorApp.addListener('appStateChange', (state) => {
-    if (state.isActive && lockState.enabled && lockState.autoLockOnBackground && !lockState.locked) {
-      lock()
-    }
   })
 }
 
@@ -427,7 +416,6 @@ export async function initLock(): Promise<void> {
   registerIdleCheck()
   registerVisibilityAutoLock()
   registerBlurAutoLock()
-  registerAndroidAutoLock()
 }
 
 /** 设置变更后由外部调用以重建空闲检测 */

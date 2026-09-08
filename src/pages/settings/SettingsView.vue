@@ -144,13 +144,6 @@
           <el-button type="primary" :loading="backuping" @click="doBackup">导出</el-button>
         </div>
       </div>
-      <div v-if="isDesktop" class="setting-row">
-        <div class="setting-row__label">
-          <span>默认备份目录</span>
-          <span class="cp-text-sm cp-text-secondary">{{ settingsStore.config.backupPath || '未设置（默认下载目录）' }}</span>
-        </div>
-        <el-button @click="pickBackupPath">选择目录</el-button>
-      </div>
       <div class="setting-row">
         <div class="setting-row__label">
           <span>还原备份</span>
@@ -323,7 +316,6 @@
         <div class="about-item"><span>应用</span><b>云枢 CloudPivot</b></div>
         <div class="about-item"><span>版本</span><b>v1.1.0</b></div>
         <div class="about-item"><span>运行环境</span><b>{{ runtimeLabel }}</b></div>
-        <div class="about-item" v-if="isDesktop"><span>Electron</span><b class="cp-mono">{{ electronVersions?.electron ?? '未知' }}</b></div>
         <div class="about-item"><span>数据存储</span><b>IndexedDB（本机私有化）</b></div>
       </div>
     </div>
@@ -361,7 +353,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Files, InfoFilled, Lock, Message, Monitor, Odometer, Setting, Sunny, WarningFilled } from '@element-plus/icons-vue'
-import { isElectron, usePlatform } from '@/utils/platform'
+import { usePlatform } from '@/utils/platform'
 import { useThemeStore } from '@/store/useThemeStore'
 import { useSettingsStore, SYNC_INTERVAL_OPTIONS } from '@/store/useSettingsStore'
 import { useAccountStore } from '@/store/useAccountStore'
@@ -435,27 +427,14 @@ async function doBackup() {
     const filename = `cloudpivot-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`
     const content = JSON.stringify(payload, null, 2)
 
-    if (isElectron && window.cloudpivot) {
-      const dir = settingsStore.config.backupPath || undefined
-      const saved = await window.cloudpivot.fs.saveFile({
-        defaultPath: dir ? `${dir}\\${filename}` : filename,
-        content,
-        filters: [{ name: 'JSON 备份', extensions: ['json'] }]
-      })
-      if (saved) {
-        ElMessage.success(`备份已导出：${saved}`)
-        await logStore.write({ module: 'system', action: '导出备份', detail: `导出备份${backupIncludeCredentials.value ? '（含密钥）' : '（不含密钥）'}` })
-      }
-    } else {
-      const blob = new Blob([content], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = filename
-      anchor.click()
-      URL.revokeObjectURL(url)
-      ElMessage.success('备份已导出')
-    }
+    const blob = new Blob([content], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    anchor.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('备份已导出')
   } catch (error) {
     ElMessage.error((error as Error).message)
   } finally {
@@ -464,15 +443,7 @@ async function doBackup() {
 }
 
 async function doRestore() {
-  if (isElectron && window.cloudpivot) {
-    const file = await window.cloudpivot.fs.openFile({
-      filters: [{ name: 'JSON 备份', extensions: ['json'] }]
-    })
-    if (!file) return
-    await applyRestore(file.content)
-  } else {
-    fileInput.value?.click()
-  }
+  fileInput.value?.click()
 }
 
 async function onRestoreFile(event: Event) {
@@ -505,15 +476,6 @@ async function applyRestore(content: string) {
     ElMessage.error((error as Error).message)
   } finally {
     restoring.value = false
-  }
-}
-
-async function pickBackupPath() {
-  if (!isElectron || !window.cloudpivot) return
-  const path = await window.cloudpivot.fs.pickDirectory()
-  if (path) {
-    await settingsStore.update({ backupPath: path })
-    ElMessage.success(`备份目录已设置为：${path}`)
   }
 }
 
@@ -780,20 +742,13 @@ async function doWipe() {
 
 /* ---------------- 关于 ---------------- */
 const runtimeLabel = computed(() => {
-  if (isElectron) return `Electron（${window.cloudpivot?.platform ?? 'desktop'}）`
-  if (isMobile) return 'Android (Capacitor)'
-  return 'Web 浏览器'
+  if (isMobile) return 'Flutter (Android)'
+  return 'Flutter (Windows)'
 })
-
-const electronVersions = ref<{ electron?: string; chrome?: string; node?: string } | null>(null)
 
 onMounted(async () => {
   await settingsStore.init()
   await loadEmailSettings()
-  if (isElectron && window.cloudpivot) {
-    const info = await window.cloudpivot.system.getInfo().catch(() => null)
-    electronVersions.value = (info?.versions as { electron?: string; chrome?: string; node?: string } | undefined) ?? null
-  }
 })
 </script>
 

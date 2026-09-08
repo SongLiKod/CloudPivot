@@ -11,7 +11,6 @@
  */
 import emailjs from '@emailjs/browser'
 import { getConfig, setConfig } from '@/utils/db'
-import { isElectron } from '@/utils/platform'
 
 const CONFIG_KEY = '__email_settings__'
 
@@ -69,17 +68,6 @@ export async function sendEmail(subject: string, text: string): Promise<void> {
   params[settings.paramTo || 'to_email'] = settings.recipient.trim()
   params[settings.paramSubject || 'subject'] = subject
   params[settings.paramMessage || 'message'] = text
-
-  // Electron 桌面端：file:// 下浏览器 XHR 会被 CORS 拦截，改由主进程 net.fetch 发送
-  if (isElectron && typeof window !== 'undefined' && window.cloudpivot?.email) {
-    await window.cloudpivot.email.send({
-      serviceId: settings.serviceId.trim(),
-      templateId: settings.templateId.trim(),
-      publicKey: settings.publicKey.trim(),
-      params
-    })
-    return
-  }
 
   await emailjs.send(
     settings.serviceId.trim(),

@@ -17,7 +17,8 @@
     "electron:portable": "vite build && electron-builder --win portable --publish never",
     "cap:sync": "cap sync",
     "cap:android": "cap sync android && cap open android",
-    "apk:build": "cap sync android && cd android && gradlew.bat assembleRelease"
+    "icons": "node scripts/gen-icons.cjs",
+    "apk:build": "cap sync android && node scripts/gen-icons.cjs && cd android && gradlew.bat assembleRelease"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",
@@ -59,7 +60,8 @@
     "sass": "^1.83.4",
     "typescript": "^5.7.3",
     "vite": "^6.0.7",
-    "vue-tsc": "^2.2.0"
+    "vue-tsc": "^2.2.0",
+    "sharp": "^0.33.5"
   },
   "build": {
     "appId": "com.cloudpivot.app",
@@ -72,6 +74,7 @@
       "electron/**/*"
     ],
     "win": {
+      "icon": "electron/assets/icon.ico",
       "target": [
         {
           "target": "nsis",

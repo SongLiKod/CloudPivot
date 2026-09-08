@@ -472,7 +472,7 @@ export async function createBackup(includeCredentials = true): Promise<BackupPay
 
   return {
     app: 'CloudPivot',
-    version: '1.1.0',
+    version: __APP_VERSION__,
     exportedAt: Date.now(),
     includeCredentials,
     data: {

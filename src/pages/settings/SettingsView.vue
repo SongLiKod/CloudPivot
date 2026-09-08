@@ -321,7 +321,7 @@
       </div>
       <div class="about-grid">
         <div class="about-item"><span>应用</span><b>云枢 CloudPivot</b></div>
-        <div class="about-item"><span>版本</span><b>v1.1.0</b></div>
+        <div class="about-item"><span>版本</span><b>v{{ appVersion }}</b></div>
         <div class="about-item"><span>运行环境</span><b>{{ runtimeLabel }}</b></div>
         <div class="about-item" v-if="isDesktop"><span>Electron</span><b class="cp-mono">{{ electronVersions?.electron ?? '未知' }}</b></div>
         <div class="about-item"><span>数据存储</span><b>IndexedDB（本机私有化）</b></div>
@@ -369,6 +369,9 @@ import { useLogStore } from '@/store/useLogStore'
 import { createBackup, restoreBackup, clearAllExceptAccounts, wipeAllData } from '@/utils/db'
 import { resetMasterKeySession } from '@/utils/crypto'
 import { useResourceStore } from '@/store/useResourceStore'
+
+const appVersion = __APP_VERSION__
+
 import {
   lockState,
   enableLock,

@@ -1,12 +1,16 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import pkg from './package.json'
 
 // CloudPivot 构建配置
 // base 使用相对路径，保证 Electron(file://) 与 Capacitor(android://) 均可正确加载资源
 export default defineConfig({
   base: './',
   plugins: [vue()],
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version)
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))

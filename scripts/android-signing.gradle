@@ -1,8 +1,11 @@
 // Android release 签名配置（由 CI 注入环境变量启用；无 keystore 文件时不生效）
 // debug APK 始终使用 debug 证书签名，可直接安装测试。
 android {
+    // keystore 与签名脚本同置于 android/app/ 下，被 apply 时 project 目录即 android/app/，
+    // 用 project.file() 基于当前目录正确解析，避免 ./android/app/android/app/... 的重复路径问题。
     def ks = System.getenv('ANDROID_KEYSTORE')
-    if (ks != null && file(ks).exists()) {
+    def ksFile = ks != null ? project.file(ks) : null
+    if (ksFile != null && ksFile.exists()) {
         signingConfigs {
             release {
                 storeFile file(ks)

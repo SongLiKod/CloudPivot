@@ -3,6 +3,12 @@
     <!-- 移动端：分组快捷选择 -->
     <div v-if="isMobile" class="group-scroll">
       <span
+        class="group-chip group-chip--add"
+        @click="openGroupDialog()"
+      >
+        <el-icon :size="13"><Plus /></el-icon>&nbsp;新建分组
+      </span>
+      <span
         v-for="g in allGroups"
         :key="g.id"
         class="group-chip"
@@ -698,6 +704,11 @@ onMounted(async () => {
   font-size: 12px;
 
   &.is-active {
+    background: var(--cp-primary-bg);
+    color: var(--cp-primary);
+  }
+
+  &--add {
     background: var(--cp-primary-bg);
     color: var(--cp-primary);
   }

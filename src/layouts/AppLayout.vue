@@ -72,6 +72,13 @@
       <header v-if="isMobile" class="main__header main__header--mobile">
         <div class="mobile-title">{{ currentTitle }}</div>
         <div class="main__header-right">
+          <div class="icon-btn" @click="$router.push('/batch')">
+            <el-icon :size="18"><Operation /></el-icon>
+            <span v-if="batchRunning" class="icon-btn__dot"></span>
+          </div>
+          <div class="icon-btn" @click="$router.push('/logs')">
+            <el-icon :size="18"><Document /></el-icon>
+          </div>
           <div class="icon-btn" @click="onRefreshAll">
             <el-icon :size="18"><RefreshRight /></el-icon>
           </div>

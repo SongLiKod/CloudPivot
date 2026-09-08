@@ -9,6 +9,7 @@
  *  - 一个 Template（正文使用变量，如 {{message}}、{{subject}}、{{to_email}}）
  *  - 一个 Public Key（公开，客户端使用）
  */
+import { Capacitor, CapacitorHttp } from '@capacitor/core'
 import emailjs from '@emailjs/browser'
 import { getConfig, setConfig } from '@/utils/db'
 import { isElectron } from '@/utils/platform'
@@ -81,6 +82,32 @@ export async function sendEmail(subject: string, text: string): Promise<void> {
     return
   }
 
+  // Capacitor 原生（Android/iOS）：WebView 内 @emailjs/browser 会被 CORS/预检拦截，
+  // 改走原生 HTTP 通道（CapacitorHttp，需在 capacitor.config 中启用），绕过浏览器同源限制
+  const platform = typeof Capacitor !== 'undefined' ? Capacitor.getPlatform() : 'web'
+  if (platform !== 'web') {
+    const res = await CapacitorHttp.post({
+      url: 'https://api.emailjs.com/api/v1.0/email/send',
+      headers: { 'Content-Type': 'application/json' },
+      data: {
+        service_id: settings.serviceId.trim(),
+        template_id: settings.templateId.trim(),
+        user_id: settings.publicKey.trim(),
+        template_params: params
+      }
+    })
+    if (res.status < 200 || res.status >= 300) {
+      const detail = (res.data as { message?: string } | undefined)?.message
+      throw new Error(
+        detail
+          ? `邮件发送失败：${detail}`
+          : `邮件发送失败（HTTP ${res.status}）`
+      )
+    }
+    return
+  }
+
+  // 浏览器 / WebView：走 @emailjs/browser（浏览器开发环境、纯 Web 部署）
   await emailjs.send(
     settings.serviceId.trim(),
     settings.templateId.trim(),

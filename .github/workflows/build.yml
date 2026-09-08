@@ -83,6 +83,10 @@ jobs:
       - name: Copy web assets into Flutter shell
         run: node scripts/copy-web.mjs
 
+      - name: Resolve Flutter dependencies
+        working-directory: flutter_app
+        run: flutter pub get
+
       - name: Patch inappwebview AGP9 compat
         run: node scripts/patch-inappwebview.mjs
 

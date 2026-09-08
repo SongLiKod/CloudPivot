@@ -509,6 +509,8 @@ export interface BackupPayload {
   exportedAt: number
   /** 是否包含加密后的账号密钥（默认包含，恢复时需同一设备主密钥） */
   includeCredentials: boolean
+  /** 含密钥导出时的主密钥原始字节（base64），使备份可在任意设备还原凭据 */
+  masterKeyRaw?: string
   data: {
     accounts: CloudflareAccount[]
     groups: AccountGroup[]

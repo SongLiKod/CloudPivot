@@ -114,6 +114,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { Fold, Expand } from '@element-plus/icons-vue'
 import { NAV_ITEMS } from '@/router'
 import { useAccountStore } from '@/store/useAccountStore'
@@ -147,7 +148,17 @@ function isActive(path: string): boolean {
 
 async function onRefreshAll() {
   if (accountStore.loading) return
-  await accountStore.refreshAll()
+  const result = await accountStore.refreshAll()
+  let msg = `刷新完成：成功 ${result.success.length} 个`
+  if (result.success.length) {
+    msg += `（${result.success.join('、')}）`
+  }
+  if (result.failed.length) {
+    msg += `，失败 ${result.failed.length} 个（${result.failed.join('、')}）`
+    ElMessage.warning(msg)
+  } else {
+    ElMessage.success(msg)
+  }
 }
 
 onMounted(() => {

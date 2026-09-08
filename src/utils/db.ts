@@ -12,7 +12,14 @@
  *  - inspection_table     自动巡检异常记录
  */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import { resetMasterKeySession, sha256Hex } from '@/utils/crypto'
+import {
+  resetMasterKeySession,
+  sha256Hex,
+  decryptText,
+  unwrapMasterKeyRaw,
+  importMasterKeyRaw
+} from '@/utils/crypto'
+import { purgeSessionCredentials } from '@/store/credentialService'
 import type {
   AccountGroup,
   BatchTask,
@@ -449,6 +456,8 @@ export interface BackupPayload {
   exportedAt: number
   /** 是否包含加密后的账号密钥（默认包含，恢复时需同一设备主密钥） */
   includeCredentials: boolean
+  /** 含密钥导出时的主密钥原始字节（base64），使备份可在任意设备还原凭据 */
+  masterKeyRaw?: string
   data: {
     accounts: CloudflareAccount[]
     groups: AccountGroup[]
@@ -470,11 +479,15 @@ export async function createBackup(includeCredentials = true): Promise<BackupPay
   const safeConfig = { ...config }
   if (!includeCredentials) delete safeConfig.__master_key__
 
+  // 含密钥导出时附带主密钥原始字节，使备份可在其它设备还原凭据
+  const masterKeyRaw = includeCredentials ? ((await unwrapMasterKeyRaw()) ?? undefined) : undefined
+
   return {
     app: 'CloudPivot',
     version: __APP_VERSION__,
     exportedAt: Date.now(),
     includeCredentials,
+    masterKeyRaw,
     data: {
       accounts: includeCredentials
         ? accounts
@@ -489,32 +502,104 @@ export async function createBackup(includeCredentials = true): Promise<BackupPay
 
 export async function restoreBackup(
   payload: BackupPayload,
-  options: { overwriteLogs?: boolean } = {}
-): Promise<{ accounts: number; groups: number; templates: number }> {
+  options: { overwriteLogs?: boolean; includeCredentials?: boolean } = {}
+): Promise<{
+  accounts: number
+  groups: number
+  templates: number
+  successAccounts: string[]
+  failedAccounts: string[]
+}> {
   if (!payload || payload.app !== 'CloudPivot' || !payload.data) {
     throw new Error('备份文件格式不正确，无法还原')
   }
   const { accounts = [], groups = [], templates = [], config = {} } = payload.data
+  const restoreCred = options.includeCredentials ?? true
 
   if (groups.length) await putMany(STORE.group, groups)
-  if (accounts.length) await putMany(STORE.account, accounts)
+  if (accounts.length) {
+    const finalAccounts = restoreCred
+      ? accounts
+      : accounts.map((a) => ({ ...a, credential: { cipher: '', iv: '', alg: 'AES-GCM', kv: 1 } }))
+    await putMany(STORE.account, finalAccounts)
+  }
   if (templates.length) await putMany(STORE.template, templates)
 
+  // 备份导入前先留存本机主密钥，导入失败时用于回滚（保护本机原有数据）
+  const originalMasterKey = restoreCred
+    ? await getConfig<EncryptedPayload | null>('__master_key__', null)
+    : null
+
   for (const [key, value] of Object.entries(config)) {
-    // 主密钥仅在本机不存在时才恢复，避免覆盖当前设备可用密钥
     if (key === '__master_key__') {
-      const existing = await getConfig<unknown>('__master_key__', null)
-      if (existing) continue
+      if (!restoreCred) continue
     }
     await setConfig(key, value)
   }
+
+  // 密钥还原：
+  // - 新版含密钥备份携带主密钥原始字节：直接注入会话并用本机包装密钥重新落盘，
+  //   凭据可在任意设备解密（解决跨设备还原）；
+  // - 旧版备份仅有包装后的 __master_key__：清空会话缓存，验证时按刚写入的磁盘状态重新加载
+  if (restoreCred && payload.masterKeyRaw) {
+    try {
+      await importMasterKeyRaw(payload.masterKeyRaw)
+    } catch {
+      // 备份中的原始主密钥无效：回滚本机主密钥，避免破坏本机原有数据
+      if (originalMasterKey) await setConfig('__master_key__', originalMasterKey)
+      resetMasterKeySession()
+    }
+  } else if (restoreCred) {
+    resetMasterKeySession()
+  }
+  // 账号数据已整体替换，清空内存凭据缓存避免读到旧数据
+  purgeSessionCredentials()
 
   if (options.overwriteLogs && payload.data.logs?.length) {
     await clearStore(STORE.opLog)
     await putMany(STORE.opLog, payload.data.logs)
   }
 
-  return { accounts: accounts.length, groups: groups.length, templates: templates.length }
+  // 检测账号凭据可用性（仅在导入密钥时有意义）
+  const successAccounts: string[] = []
+  const failedAccounts: string[] = []
+  if (restoreCred) {
+    let masterKeyVerified = false
+    let masterKeyChecked = false
+
+    for (const account of accounts) {
+      const cred = account.credential
+      if (!cred?.cipher || !cred?.iv) {
+        failedAccounts.push(account.name || account.id)
+        continue
+      }
+
+      // 首次遇到有凭据的账号时验证主密钥（不自动生成新密钥，避免覆盖刚还原的数据）
+      if (!masterKeyChecked) {
+        masterKeyChecked = true
+        try {
+          await decryptText(cred, false)
+          masterKeyVerified = true
+        } catch {
+          masterKeyVerified = false
+          // 旧版备份（无原始主密钥）在本机解不开：回滚本机原有主密钥
+          if (!payload.masterKeyRaw && originalMasterKey) {
+            await setConfig('__master_key__', originalMasterKey)
+          }
+          resetMasterKeySession()
+        }
+      }
+
+      if (!masterKeyVerified) {
+        failedAccounts.push(account.name || account.id)
+        continue
+      }
+
+      successAccounts.push(account.name || account.id)
+    }
+  }
+
+  return { accounts: accounts.length, groups: groups.length, templates: templates.length, successAccounts, failedAccounts }
 }
 
 /** 清空全部本地数据（危险操作，需二次确认），并重置会话内存主密钥 */

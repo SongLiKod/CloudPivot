@@ -83,6 +83,9 @@ jobs:
       - name: Copy web assets into Flutter shell
         run: node scripts/copy-web.mjs
 
+      - name: Patch inappwebview AGP9 compat
+        run: node scripts/patch-inappwebview.mjs
+
       - name: Restore release keystore
         if: env.ANDROID_KEYSTORE_BASE64 != ''
         env:

@@ -23,6 +23,7 @@ function createWindow() {
     show: false,
     backgroundColor: '#0b1220',
     autoHideMenuBar: true,
+    icon: path.join(__dirname, 'assets', 'icon.ico'),
     webPreferences: {
       preload: PRELOAD,
       contextIsolation: true,

@@ -273,7 +273,7 @@
                   </template>
                 </el-table-column>
                 <el-table-column label="所属域名" min-width="160">
-                  <template #default="{ row }">{{ row.zone_name ?? '-' }}</template>
+                  <template #default="{ row }">{{ pagesZoneName(row as CfPagesDomain) }}</template>
                 </el-table-column>
                 <el-table-column label="创建时间" min-width="160">
                   <template #default="{ row }">{{ formatTime(row.created_on, false) }}</template>
@@ -292,7 +292,7 @@
                   <span class="cp-list-card__title cp-mono">{{ d.name }}</span>
                   <el-tag size="small" effect="light" :type="domainStatusTagType(d.status)">{{ domainStatusLabel(d.status) }}</el-tag>
                 </div>
-                <div class="cp-list-card__row"><span>所属域名</span><span>{{ d.zone_name ?? '-' }}</span></div>
+                <div class="cp-list-card__row"><span>所属域名</span><span>{{ pagesZoneName(d as CfPagesDomain) }}</span></div>
                 <div class="cp-list-card__actions">
                   <van-button size="mini" type="danger" plain @click="removeDomain(d as CfPagesDomain)">删除</van-button>
                 </div>
@@ -860,6 +860,13 @@ function domainStatusTagType(status?: string): 'success' | 'primary' | 'warning'
   if (status === 'error' || status === 'validation_timed_out' || status === 'deployment_failed') return 'danger'
   if (status === 'pending' || status === 'initializing') return 'warning'
   return 'primary'
+}
+
+/** Pages 域名接口仅返回 zone_tag（zone id），据此从 zone 资源解析所属域名名称 */
+function pagesZoneName(domain: CfPagesDomain): string {
+  if (domain.zone_name) return domain.zone_name
+  const zone = resourceStore.zones.rows.find((z) => z.id === domain.zone_tag)
+  return zone?.name ?? '-'
 }
 
 async function loadDomains() {

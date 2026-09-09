@@ -19,9 +19,18 @@
       </el-button>
     </div>
 
-    <el-empty v-if="!zoneOptions.length" description="暂无域名，请先在「域名 DNS」中刷新" />
+<el-empty v-if="!zoneOptions.length" description="暂无域名，请先在「域名 DNS」中刷新" />
 
     <template v-else>
+      <el-alert
+        v-if="rulesError"
+        :title="rulesError"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="cp-alert-row"
+      />
+
       <!-- 桌面 Tabs -->
       <el-tabs v-if="isDesktop" v-model="activeTab">
         <el-tab-pane label="IP 访问规则" name="access">
@@ -32,6 +41,9 @@
                   {{ targetLabel(row.configuration?.target) }}
                 </el-tag>
                 <span class="cp-mono">{{ row.configuration?.value }}</span>
+                <el-tag v-if="isAccountRule(row as CfAccessRule)" size="small" effect="plain" type="info" class="scope-tag">
+                  账号级
+                </el-tag>
               </template>
             </el-table-column>
             <el-table-column label="动作" width="150">
@@ -52,42 +64,44 @@
               </template>
             </el-table-column>
           </el-table>
+          <el-empty v-if="!ruleLoading && !accessRules.length" description="暂无 IP 访问规则" />
         </el-tab-pane>
 
         <el-tab-pane label="速率限制" name="limits">
           <el-table :data="rateLimits" v-loading="ruleLoading" class="waf-table">
-            <el-table-column label="描述" min-width="200" show-overflow-tooltip>
+            <el-table-column label="描述" min-width="180" show-overflow-tooltip>
               <template #default="{ row }">{{ row.description ?? '-' }}</template>
             </el-table-column>
-            <el-table-column label="匹配 URL" min-width="200">
+            <el-table-column label="匹配表达式" min-width="240" show-overflow-tooltip>
               <template #default="{ row }">
-                <span class="cp-mono cp-text-sm">{{ rateLimitUrl(row as CfRateLimit) }}</span>
+                <span class="cp-mono cp-text-sm">{{ row.expression }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="阈值" width="140">
-              <template #default="{ row }">{{ row.limit ?? '-' }} 次 / {{ ratePeriodLabel(row.period) }}</template>
+            <el-table-column label="阈值" width="160">
+              <template #default="{ row }">{{ row.ratelimit?.requests_per_period ?? '-' }} 次 / {{ ratePeriodLabel(row.ratelimit?.period) }}</template>
             </el-table-column>
             <el-table-column label="动作" width="120">
               <template #default="{ row }">
-                <el-tag size="small" effect="light" :type="limitModeTagType(row.action?.mode)">{{ limitModeLabel(row.action?.mode) }}</el-tag>
+                <el-tag size="small" effect="light" :type="limitModeTagType(row.action)">{{ limitModeLabel(row.action) }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column label="启用" width="80">
               <template #default="{ row }">
                 <el-switch
-                  :model-value="!row.disabled"
+                  :model-value="row.enabled !== false"
                   size="small"
-@change="(v: string | number | boolean) => toggleRateLimit(row as CfRateLimit, !!v)"
+                  @change="(v: string | number | boolean) => toggleRateLimit(row as RateLimitRule, !!v)"
                 />
               </template>
             </el-table-column>
             <el-table-column label="操作" width="130" fixed="right">
               <template #default="{ row }">
-                <el-button size="small" text type="primary" @click="openLimitDialog(row as CfRateLimit)">编辑</el-button>
-                <el-button size="small" text type="danger" @click="removeRateLimit(row as CfRateLimit)">删除</el-button>
+                <el-button size="small" text type="primary" @click="openLimitDialog(row as unknown as RateLimitRule)">编辑</el-button>
+                <el-button size="small" text type="danger" @click="removeRateLimit(row as unknown as RateLimitRule)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
+          <el-empty v-if="!ruleLoading && !rateLimits.length" description="暂无速率限制规则" />
         </el-tab-pane>
       </el-tabs>
 
@@ -101,6 +115,7 @@
                 <div class="cp-list-card__head">
                   <span class="cp-text-sm">{{ targetLabel(row.configuration?.target) }}</span>
                   <el-tag size="small" effect="light" :type="modeTagType(row.mode)">{{ modeLabel(row.mode) }}</el-tag>
+                  <el-tag v-if="isAccountRule(row as CfAccessRule)" size="small" effect="plain" type="info">账号级</el-tag>
                 </div>
                 <div class="cp-list-card__row"><span>对象</span><span class="cp-mono">{{ row.configuration?.value }}</span></div>
                 <div class="cp-list-card__row"><span>备注</span><span class="cp-ellipsis">{{ row.notes ?? '-' }}</span></div>
@@ -114,13 +129,13 @@
           <van-tab title="速率限制">
             <div class="tab-pad">
               <el-empty v-if="!rateLimits.length" description="暂无速率限制规则" />
-              <div v-for="row in rateLimits" :key="row.id" class="cp-list-card">
+              <div v-for="row in rateLimits" :key="row.id ?? row.expression" class="cp-list-card">
                 <div class="cp-list-card__head">
                   <span class="cp-list-card__title">{{ row.description ?? '未命名规则' }}</span>
-                  <el-switch :model-value="!row.disabled" size="small" @change="(v: string | number | boolean) => toggleRateLimit(row, !!v)" />
+                  <el-switch :model-value="row.enabled !== false" size="small" @change="(v: string | number | boolean) => toggleRateLimit(row, !!v)" />
                 </div>
-                <div class="cp-list-card__row"><span>匹配</span><span class="cp-mono cp-ellipsis">{{ rateLimitUrl(row) }}</span></div>
-                <div class="cp-list-card__row"><span>阈值</span><span>{{ row.limit ?? '-' }} 次 / {{ ratePeriodLabel(row.period) }} · {{ limitModeLabel(row.action?.mode) }}</span></div>
+                <div class="cp-list-card__row"><span>表达式</span><span class="cp-mono cp-ellipsis">{{ row.expression }}</span></div>
+                <div class="cp-list-card__row"><span>阈值</span><span>{{ row.ratelimit?.requests_per_period ?? '-' }} 次 / {{ ratePeriodLabel(row.ratelimit?.period) }} · {{ limitModeLabel(row.action) }}</span></div>
                 <div class="cp-list-card__actions">
                   <van-button size="mini" type="primary" plain @click="openLimitDialog(row)">编辑</van-button>
                   <van-button size="mini" type="danger" plain @click="removeRateLimit(row)">删除</van-button>
@@ -181,16 +196,23 @@
     <el-dialog
       :model-value="limitDialogVisible"
       :title="editingLimit ? '编辑速率限制' : '新增速率限制'"
-      width="480px"
+      width="520px"
       :append-to-body="true"
       @close="limitDialogVisible = false"
     >
-      <el-form label-width="80px" label-position="left">
+      <el-form label-width="90px" label-position="left">
         <el-form-item label="描述">
           <el-input v-model="limitForm.description" placeholder="规则用途说明" />
         </el-form-item>
-        <el-form-item label="URL 规则">
-          <el-input v-model="limitForm.url" class="cp-mono" placeholder="如 example.com/api/* 或 *（全站）" />
+        <el-form-item label="匹配表达式">
+          <el-input
+            v-model="limitForm.expression"
+            type="textarea"
+            :rows="2"
+            class="cp-mono"
+            placeholder="Rules 语言表达式，如 (http.host eq &quot;example.com&quot; and http.request.uri.path starts_with &quot;/api/&quot;)"
+          />
+          <span class="cp-text-sm cp-text-secondary">留空表示全部流量（true）</span>
         </el-form-item>
         <el-form-item label="时间窗口">
           <el-select v-model="limitForm.period" style="width: 100%">
@@ -202,14 +224,19 @@
           </el-select>
         </el-form-item>
         <el-form-item label="请求阈值">
-          <el-input-number v-model="limitForm.limit" :min="1" :max="100000" style="width: 100%" />
+          <el-input-number v-model="limitForm.requestsPerPeriod" :min="1" :max="1000000" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="缓解时长(秒)">
+          <el-input-number v-model="limitForm.mitigationTimeout" :min="1" :max="86400" style="width: 100%" />
+          <span class="cp-text-sm cp-text-secondary">触发后拦截的持续时间</span>
         </el-form-item>
         <el-form-item label="处理动作">
-          <el-select v-model="limitForm.actionMode" style="width: 100%">
-            <el-option label="模拟（仅记录）" value="simulate" />
-            <el-option label="阻止（ban）" value="ban" />
+          <el-select v-model="limitForm.action" style="width: 100%">
+            <el-option label="阻止（block）" value="block" />
+            <el-option label="仅记录（log，需套餐支持）" value="log" />
+            <el-option label="托管挑战（managed_challenge）" value="managed_challenge" />
             <el-option label="挑战（challenge）" value="challenge" />
-            <el-option label="JS 挑战" value="js_challenge" />
+            <el-option label="JS 挑战（js_challenge）" value="js_challenge" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -253,8 +280,9 @@ import { useResourceStore } from '@/store/useResourceStore'
 import { useLogStore } from '@/store/useLogStore'
 import { buildRequestContext } from '@/store/credentialService'
 import * as wafApi from '@/api/waf'
+import type { RateLimitRule } from '@/api/waf'
 import { formatTime } from '@/utils/format'
-import type { CfAccessRule, CfRateLimit } from '@/types'
+import type { CfAccessRule } from '@/types'
 
 const { isDesktop, isMobile } = usePlatform()
 const accountStore = useAccountStore()
@@ -265,8 +293,9 @@ const zoneId = ref('')
 const activeTab = ref('access')
 const mobileTab = ref(0)
 const ruleLoading = ref(false)
+const rulesError = ref('')
 const accessRules = ref<CfAccessRule[]>([])
-const rateLimits = ref<CfRateLimit[]>([])
+const rateLimits = ref<RateLimitRule[]>([])
 
 const zoneOptions = computed(() =>
   resourceStore.zones.rows.filter((z) => z.status === 'active')
@@ -277,6 +306,18 @@ const currentAccount = computed(() => {
   const zone = currentZone.value
   return zone ? accountStore.accounts.find((a) => a.id === zone.__accountId) : undefined
 })
+
+/** 当前 zone 归属的 Cloudflare account_id（本地 id 缺失时退回 zone 内的 account.id） */
+const currentCfAccountId = computed(() => {
+  const account = currentAccount.value
+  if (account?.cfAccountId) return account.cfAccountId
+  return currentZone.value?.account?.id ?? ''
+})
+
+/** 账号级规则（作用于该账号全部域名），编辑/删除需走账号级接口 */
+function isAccountRule(rule: CfAccessRule): boolean {
+  return rule.scope?.type === 'account'
+}
 
 function accountName(accountId?: string): string {
   if (!accountId) return '-'
@@ -317,16 +358,18 @@ function targetTagType(target?: string): 'primary' | 'success' | 'info' {
 }
 function limitModeLabel(mode?: string): string {
   const map: Record<string, string> = {
-    simulate: '模拟',
-    ban: '阻止',
+    block: '阻止',
+    log: '仅记录',
     challenge: '挑战',
-    js_challenge: 'JS 挑战'
+    js_challenge: 'JS 挑战',
+    managed_challenge: '托管挑战'
   }
   return mode ? (map[mode] ?? mode) : '-'
 }
-function limitModeTagType(mode?: string): 'warning' | 'danger' | 'info' {
-  if (mode === 'simulate') return 'warning'
-  if (mode === 'ban') return 'danger'
+function limitModeTagType(mode?: string): 'warning' | 'danger' | 'primary' | 'info' {
+  if (mode === 'log') return 'warning'
+  if (mode === 'block') return 'danger'
+  if (mode === 'challenge' || mode === 'js_challenge' || mode === 'managed_challenge') return 'primary'
   return 'info'
 }
 function ratePeriodLabel(period?: number): string {
@@ -345,22 +388,40 @@ function ratePeriodLabel(period?: number): string {
       return `${period ?? '-'} 秒`
   }
 }
-function rateLimitUrl(row: CfRateLimit): string {
-  const request = (row.match as { request?: { url?: string } } | undefined)?.request
-  return request?.url ?? '*'
-}
 
 /* ---------------- 数据加载 ---------------- */
 async function loadRules() {
+  if (!zoneId.value) return
   const account = currentAccount.value
-  if (!account || !zoneId.value) return
+  if (!account) {
+    rulesError.value = '未找到该域名所属账号，请先在「账号管理」对该账号执行「拉取资源」'
+    accessRules.value = []
+    rateLimits.value = []
+    return
+  }
   ruleLoading.value = true
+  rulesError.value = ''
   try {
     const ctx = await buildRequestContext(account)
-    accessRules.value = await wafApi.listAccessRules(ctx, zoneId.value)
-    rateLimits.value = await wafApi.listRateLimits(ctx, zoneId.value).catch(() => [])
+    const cfAccountId = currentCfAccountId.value
+    // IP 访问规则 = 账号级 + 当前 zone 级，按 id 去重合并（账号级规则同样作用于该域名）
+    const [zoneRules, accountRules, limits] = await Promise.all([
+      wafApi.listAccessRules(ctx, zoneId.value),
+      cfAccountId
+        ? wafApi.listAccountAccessRules(ctx, cfAccountId).catch(() => [] as CfAccessRule[])
+        : Promise.resolve([] as CfAccessRule[]),
+      wafApi.listRateLimits(ctx, zoneId.value)
+    ])
+    const merged = new Map<string, CfAccessRule>()
+    for (const rule of [...accountRules, ...zoneRules]) {
+      merged.set(rule.id, rule)
+    }
+    accessRules.value = [...merged.values()]
+    rateLimits.value = limits
   } catch (error) {
-    ElMessage.error((error as Error).message)
+    const message = (error as Error).message
+    rulesError.value = message
+    ElMessage.error(message)
   } finally {
     ruleLoading.value = false
   }
@@ -402,7 +463,16 @@ async function saveRule() {
       notes: ruleForm.notes.trim() || undefined
     }
     if (editingRule.value) {
-      await wafApi.updateAccessRule(ctx, zoneId.value, editingRule.value.id, payload)
+      const accountRule = isAccountRule(editingRule.value)
+      if (accountRule) {
+        if (!currentCfAccountId.value) {
+          ElMessage.warning('账号级规则缺少 Cloudflare 账号 ID，无法保存')
+          return
+        }
+        await wafApi.updateAccountAccessRule(ctx, currentCfAccountId.value, editingRule.value.id, payload)
+      } else {
+        await wafApi.updateAccessRule(ctx, zoneId.value, editingRule.value.id, payload)
+      }
     } else {
       await wafApi.createAccessRule(ctx, zoneId.value, payload)
     }
@@ -433,7 +503,15 @@ async function removeRule(rule: CfAccessRule) {
   })
   try {
     const ctx = await buildRequestContext(account)
-    await wafApi.deleteAccessRule(ctx, zoneId.value, rule.id)
+    if (isAccountRule(rule)) {
+      if (!currentCfAccountId.value) {
+        ElMessage.warning('账号级规则缺少 Cloudflare 账号 ID，无法删除')
+        return
+      }
+      await wafApi.deleteAccountAccessRule(ctx, currentCfAccountId.value, rule.id)
+    } else {
+      await wafApi.deleteAccessRule(ctx, zoneId.value, rule.id)
+    }
     await loadRules()
     ElMessage.success('已删除')
   } catch (error) {
@@ -443,24 +521,40 @@ async function removeRule(rule: CfAccessRule) {
 
 /* ---------------- 速率限制 CRUD ---------------- */
 const limitDialogVisible = ref(false)
-const editingLimit = ref<CfRateLimit | null>(null)
+const editingLimit = ref<RateLimitRule | null>(null)
 const savingLimit = ref(false)
 const limitForm = reactive({
   description: '',
-  url: '*',
+  expression: '',
   period: 60,
-  limit: 100,
-  actionMode: 'simulate'
+  requestsPerPeriod: 100,
+  mitigationTimeout: 600,
+  action: 'block'
 })
 
-function openLimitDialog(limit?: CfRateLimit) {
+function openLimitDialog(limit?: RateLimitRule) {
   editingLimit.value = limit ?? null
   limitForm.description = limit?.description ?? ''
-  limitForm.url = rateLimitUrl(limit as CfRateLimit)
-  limitForm.period = (limit?.period as 10 | 60 | 600 | 3600 | 86400) ?? 60
-  limitForm.limit = limit?.limit ?? 100
-  limitForm.actionMode = limit?.action?.mode ?? 'simulate'
+  limitForm.expression = limit?.expression && limit.expression !== 'true' ? limit.expression : ''
+  limitForm.period = (limit?.ratelimit?.period as 10 | 60 | 600 | 3600 | 86400) ?? 60
+  limitForm.requestsPerPeriod = limit?.ratelimit?.requests_per_period ?? 100
+  limitForm.mitigationTimeout = limit?.ratelimit?.mitigation_timeout ?? 600
+  limitForm.action = limit?.action ?? 'block'
   limitDialogVisible.value = true
+}
+
+function buildLimitRule(): Omit<RateLimitRule, 'id'> {
+  return {
+    description: limitForm.description.trim() || undefined,
+    expression: limitForm.expression.trim() || 'true',
+    action: limitForm.action,
+    ratelimit: {
+      characteristics: ['ip.src'],
+      period: limitForm.period,
+      requests_per_period: limitForm.requestsPerPeriod,
+      mitigation_timeout: limitForm.mitigationTimeout
+    }
+  }
 }
 
 async function saveLimit() {
@@ -469,18 +563,11 @@ async function saveLimit() {
   savingLimit.value = true
   try {
     const ctx = await buildRequestContext(account)
-    const payload: wafApi.RateLimitPayload = {
-      description: limitForm.description.trim() || undefined,
-      match: { request: { url: limitForm.url.trim() || '*' } },
-      action: { mode: limitForm.actionMode as wafApi.RateLimitPayload['action']['mode'] },
-      period: limitForm.period as wafApi.RateLimitPayload['period'],
-      limit: limitForm.limit,
-      disabled: false
-    }
-    if (editingLimit.value) {
-      await wafApi.updateRateLimit(ctx, zoneId.value, editingLimit.value.id, payload)
+    const rule = buildLimitRule()
+    if (editingLimit.value?.id) {
+      await wafApi.updateRateLimit(ctx, zoneId.value, editingLimit.value.id, rule)
     } else {
-      await wafApi.createRateLimit(ctx, zoneId.value, payload)
+      await wafApi.createRateLimit(ctx, zoneId.value, rule)
     }
     limitDialogVisible.value = false
     await loadRules()
@@ -488,7 +575,7 @@ async function saveLimit() {
     await logStore.write({
       module: 'waf',
       action: editingLimit.value ? '编辑速率限制' : '新增速率限制',
-      detail: `${limitForm.url}（${limitForm.limit}/${ratePeriodLabel(limitForm.period)}）@${currentZone.value?.name}`,
+      detail: `${limitForm.expression || '全部流量'}（${limitForm.requestsPerPeriod}/${ratePeriodLabel(limitForm.period)}）@${currentZone.value?.name}`,
       accountId: account.id,
       accountName: account.name
     })
@@ -499,18 +586,17 @@ async function saveLimit() {
   }
 }
 
-async function toggleRateLimit(limit: CfRateLimit, enabled: boolean) {
+async function toggleRateLimit(limit: RateLimitRule, enabled: boolean) {
   const account = currentAccount.value
   if (!account || !zoneId.value) return
   try {
     const ctx = await buildRequestContext(account)
-    await wafApi.updateRateLimit(ctx, zoneId.value, limit.id, {
+    await wafApi.updateRateLimit(ctx, zoneId.value, limit.id ?? '', {
       description: limit.description,
-      match: { request: { url: rateLimitUrl(limit) } },
-      action: { mode: (limit.action?.mode ?? 'simulate') as wafApi.RateLimitPayload['action']['mode'] },
-      period: (limit.period ?? 60) as wafApi.RateLimitPayload['period'],
-      limit: limit.limit,
-      disabled: !enabled
+      expression: limit.expression,
+      action: limit.action,
+      ratelimit: limit.ratelimit,
+      enabled
     })
     await loadRules()
   } catch (error) {
@@ -518,17 +604,17 @@ async function toggleRateLimit(limit: CfRateLimit, enabled: boolean) {
   }
 }
 
-async function removeRateLimit(limit: CfRateLimit) {
+async function removeRateLimit(limit: RateLimitRule) {
   const account = currentAccount.value
   if (!account || !zoneId.value) return
-  await ElMessageBox.confirm(`删除速率限制「${limit.description ?? limit.id}」？`, '删除规则', {
+  await ElMessageBox.confirm(`删除速率限制「${limit.description ?? limit.expression}」？`, '删除规则', {
     type: 'warning',
     confirmButtonText: '删除',
     cancelButtonText: '取消'
   })
   try {
     const ctx = await buildRequestContext(account)
-    await wafApi.deleteRateLimit(ctx, zoneId.value, limit.id)
+    await wafApi.deleteRateLimit(ctx, zoneId.value, limit.id ?? '')
     await loadRules()
     ElMessage.success('已删除')
   } catch (error) {
@@ -623,5 +709,9 @@ onMounted(async () => {
 
 .target-tag {
   margin-right: 8px;
+}
+
+.scope-tag {
+  margin-left: 8px;
 }
 </style>

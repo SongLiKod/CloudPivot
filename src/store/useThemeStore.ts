@@ -59,6 +59,8 @@ export const useThemeStore = defineStore('theme', {
       this.resolved = theme
       const root = document.documentElement
       root.classList.remove('theme-light', 'theme-dark')
+      // Element Plus 暗色变量仅在其官方 `html.dark` 选择器下生效，需同步挂载
+      root.classList.toggle('dark', theme === 'dark')
       root.classList.add(theme === 'dark' ? 'theme-dark' : 'theme-light')
       root.style.colorScheme = theme
 

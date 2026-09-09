@@ -51,9 +51,20 @@
           <el-table-column v-if="hasNonFreePlan" label="套餐" width="110">
             <template #default="{ row }">{{ row.plan?.name ?? '-' }}</template>
           </el-table-column>
-          <el-table-column label="Nameservers" min-width="220">
+          <el-table-column label="Nameservers" min-width="260">
             <template #default="{ row }">
-              <div v-if="row.name_servers?.length" class="cp-mono cp-text-sm">{{ row.name_servers.join('  ') }}</div>
+              <div v-if="row.name_servers?.length" class="ns-list">
+                <el-tag
+                  v-for="(ns, index) in row.name_servers"
+                  :key="ns"
+                  size="small"
+                  effect="plain"
+                  class="ns-tag cp-mono"
+                  :type="nsTagType(index)"
+                >
+                  {{ ns }}
+                </el-tag>
+              </div>
               <span v-else class="cp-text-secondary cp-text-sm">-</span>
             </template>
           </el-table-column>
@@ -384,6 +395,12 @@ const hasNonFreePlan = computed(() =>
 function accountName(accountId?: string): string {
   if (!accountId) return '-'
   return accountStore.resolveAccount(accountId)?.name ?? `未知账号(${accountId.slice(0, 6)})`
+}
+
+/** Nameserver 标签配色：轮换不同颜色便于区分每个 NS */
+function nsTagType(index: number): 'primary' | 'warning' | 'danger' | 'info' {
+  const types: Array<'primary' | 'warning' | 'danger' | 'info'> = ['primary', 'warning', 'danger', 'info']
+  return types[index % types.length]
 }
 
 function zoneStatusLabel(zone: CfZone): string {
@@ -927,6 +944,16 @@ onMounted(async () => {
 .zone-table,
 .record-table {
   @include card;
+}
+
+.ns-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ns-tag {
+  font-family: var(--cp-font-mono, monospace);
 }
 
 .zone-name {

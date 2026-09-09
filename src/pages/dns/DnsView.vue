@@ -48,12 +48,30 @@
           <el-table-column label="账号" min-width="140">
             <template #default="{ row }">{{ accountName(row.__accountId) }}</template>
           </el-table-column>
-          <el-table-column label="套餐" width="110">
+          <el-table-column label="解析记录" width="95">
+            <template #default="{ row }">
+              <span v-if="resourceStore.dns.loading && !dnsCountByZone.has(row.id)" class="cp-text-secondary cp-text-sm">…</span>
+              <span v-else-if="!resourceStore.dns.loading && !dnsCountByZone.has(row.id)" class="cp-text-secondary cp-text-sm">0</span>
+              <span v-else class="cp-text-sm cp-text-bold">{{ dnsCountByZone.get(row.id) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="hasNonFreePlan" label="套餐" width="110">
             <template #default="{ row }">{{ row.plan?.name ?? '-' }}</template>
           </el-table-column>
-          <el-table-column label="Nameservers" min-width="220">
+          <el-table-column label="Nameservers" min-width="260">
             <template #default="{ row }">
-              <div v-if="row.name_servers?.length" class="cp-mono cp-text-sm">{{ row.name_servers.join('  ') }}</div>
+              <div v-if="row.name_servers?.length" class="ns-list">
+                <el-tag
+                  v-for="(ns, index) in row.name_servers"
+                  :key="ns"
+                  size="small"
+                  effect="plain"
+                  class="ns-tag cp-mono"
+                  :type="nsTagType(index)"
+                >
+                  {{ ns }}
+                </el-tag>
+              </div>
               <span v-else class="cp-text-secondary cp-text-sm">-</span>
             </template>
           </el-table-column>
@@ -80,7 +98,28 @@
               <el-tag size="small" effect="light" :type="zoneTagType(row.status)">{{ zoneStatusLabel(row) }}</el-tag>
             </div>
             <div class="cp-list-card__row"><span>账号</span><span>{{ accountName(row.__accountId) }}</span></div>
-            <div class="cp-list-card__row"><span>套餐</span><span>{{ row.plan?.name ?? '-' }}</span></div>
+            <div class="cp-list-card__row">
+              <span>解析记录</span>
+              <span v-if="resourceStore.dns.loading && !dnsCountByZone.has(row.id)" class="cp-text-secondary">…</span>
+              <span v-else>{{ dnsCountByZone.get(row.id) ?? 0 }} 条</span>
+            </div>
+            <div v-if="hasNonFreePlan" class="cp-list-card__row"><span>套餐</span><span>{{ row.plan?.name ?? '-' }}</span></div>
+            <div class="cp-list-card__row">
+              <span>Nameservers</span>
+              <span v-if="row.name_servers?.length" class="ns-list ns-card-list">
+                <el-tag
+                  v-for="(ns, index) in row.name_servers"
+                  :key="ns"
+                  size="small"
+                  effect="plain"
+                  class="ns-tag cp-mono"
+                  :type="nsTagType(index)"
+                >
+                  {{ ns }}
+                </el-tag>
+              </span>
+              <span v-else>-</span>
+            </div>
             <div class="cp-list-card__actions">
               <van-button size="mini" type="primary" plain @click.stop="togglePause(row)">{{ row.paused ? '恢复' : '暂停' }}</van-button>
               <van-button size="mini" type="danger" plain @click.stop="removeZone(row)">删除</van-button>
@@ -376,9 +415,30 @@ const filteredZones = computed(() => {
   })
 })
 
+/** 是否存在非 Free Website 套餐（存在时才显示“套餐”列） */
+const hasNonFreePlan = computed(() =>
+  filteredZones.value.some((z) => !z.plan || z.plan.name !== 'Free Website')
+)
+
+/** 每个 zone 的解析记录条数（聚合自 DNS 资源缓存） */
+const dnsCountByZone = computed(() => {
+  const map = new Map<string, number>()
+  for (const record of resourceStore.dns.rows) {
+    if (!record.zone_id) continue
+    map.set(record.zone_id, (map.get(record.zone_id) ?? 0) + 1)
+  }
+  return map
+})
+
 function accountName(accountId?: string): string {
   if (!accountId) return '-'
   return accountStore.resolveAccount(accountId)?.name ?? `未知账号(${accountId.slice(0, 6)})`
+}
+
+/** Nameserver 标签配色：轮换不同颜色便于区分每个 NS */
+function nsTagType(index: number): 'primary' | 'warning' | 'danger' | 'info' {
+  const types: Array<'primary' | 'warning' | 'danger' | 'info'> = ['primary', 'warning', 'danger', 'info']
+  return types[index % types.length]
 }
 
 function zoneStatusLabel(zone: CfZone): string {
@@ -904,6 +964,9 @@ onMounted(async () => {
   }
   if (zoneId.value) {
     await reloadDns()
+  } else {
+    // 列表页：预加载全部解析记录（缓存优先），用于展示每个域名的记录条数
+    await resourceStore.loadDns()
   }
 })
 </script>
@@ -922,6 +985,21 @@ onMounted(async () => {
 .zone-table,
 .record-table {
   @include card;
+}
+
+.ns-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ns-card-list {
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.ns-tag {
+  font-family: var(--cp-font-mono, monospace);
 }
 
 .zone-name {

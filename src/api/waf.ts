@@ -4,8 +4,8 @@
  * - IP 访问规则（黑白名单）
  * - 速率限制 Rate Limits
  */
-import { cfPaginate, cfRequest, cfResult, type CfRequestContext } from './client'
-import type { CfAccessRule, CfRateLimit, CfRuleset } from '@/types'
+import { cfPaginate, cfRequest, cfResult, CfApiError, type CfRequestContext } from './client'
+import type { CfAccessRule, CfRuleset } from '@/types'
 
 /* ------------------------------------------------------------------ */
 /* 规则集 Rulesets                                                     */
@@ -72,6 +72,46 @@ export function listAccessRules(
   })
 }
 
+/** 账号级列表：GET /accounts/{account_id}/firewall/access_rules/rules（账号级规则同样作用于该账号所有域名） */
+export function listAccountAccessRules(
+  ctx: CfRequestContext,
+  accountId: string,
+  query: { mode?: string; configuration_target?: string; configuration_value?: string } = {}
+): Promise<CfAccessRule[]> {
+  return cfPaginate<CfAccessRule>(ctx, {
+    method: 'GET',
+    url: `/accounts/${accountId}/firewall/access_rules/rules`,
+    params: { ...query, per_page: 100 },
+    perPage: 100
+  })
+}
+
+/** 账号级修改：PUT /accounts/{account_id}/firewall/access_rules/rules/{rule_id} */
+export function updateAccountAccessRule(
+  ctx: CfRequestContext,
+  accountId: string,
+  ruleId: string,
+  payload: Partial<AccessRulePayload>
+): Promise<CfAccessRule> {
+  return cfResult<CfAccessRule>(ctx, {
+    method: 'PUT',
+    url: `/accounts/${accountId}/firewall/access_rules/rules/${ruleId}`,
+    data: payload
+  })
+}
+
+/** 账号级删除：DELETE /accounts/{account_id}/firewall/access_rules/rules/{rule_id} */
+export function deleteAccountAccessRule(
+  ctx: CfRequestContext,
+  accountId: string,
+  ruleId: string
+): Promise<{ id: string }> {
+  return cfResult<{ id: string }>(ctx, {
+    method: 'DELETE',
+    url: `/accounts/${accountId}/firewall/access_rules/rules/${ruleId}`
+  })
+}
+
 /** 新增：POST /zones/{zone_id}/firewall/access_rules/rules */
 export function createAccessRule(
   ctx: CfRequestContext,
@@ -131,68 +171,105 @@ export async function createAccessRulesBulk(
 
 /* ------------------------------------------------------------------ */
 /* 速率限制 Rate Limits                                                */
+/* 旧版 /zones/{zone_id}/rate_limits 已废弃（410），改用 Rulesets API  */
+/* 部署到 http_ratelimit 阶段入口 ruleset                               */
 /* ------------------------------------------------------------------ */
 
-export interface RateLimitPayload {
+export interface RateLimitRule {
+  id?: string
   description?: string
-  match: {
-    request: { methods?: string[]; schemes?: string[]; url: string }
+  /** Rules 语言表达式，如 (http.host eq "example.com" and http.request.uri.path starts_with "/api/") */
+  expression: string
+  /** block / challenge / js_challenge / managed_challenge / log */
+  action: string
+  enabled?: boolean
+  action_parameters?: Record<string, unknown>
+  last_updated?: string
+  ratelimit?: {
+    characteristics?: string[]
+    period?: number
+    requests_per_period?: number
+    mitigation_timeout?: number
   }
-  action: { mode: 'simulate' | 'ban' | 'challenge' | 'js_challenge'; timeout?: number }
-  period: 10 | 60 | 600 | 3600 | 86400
-  disabled?: boolean
-  limit?: number
 }
 
-/** 列表：GET /zones/{zone_id}/rate_limits */
-export function listRateLimits(
+const RATE_LIMIT_PHASE = 'http_ratelimit'
+
+/** 获取 http_ratelimit 阶段入口 ruleset；不存在（404）时返回 null */
+export async function getRateLimitRuleset(
   ctx: CfRequestContext,
   zoneId: string
-): Promise<CfRateLimit[]> {
-  return cfPaginate<CfRateLimit>(ctx, {
-    method: 'GET',
-    url: `/zones/${zoneId}/rate_limits`,
-    params: { per_page: 100 },
-    perPage: 100
-  })
+): Promise<{ id: string; rules: RateLimitRule[] } | null> {
+  try {
+    return await cfResult<{ id: string; rules: RateLimitRule[] }>(ctx, {
+      method: 'GET',
+      url: `/zones/${zoneId}/rulesets/phases/${RATE_LIMIT_PHASE}/entrypoint`
+    })
+  } catch (error) {
+    if ((error as CfApiError).status === 404) return null
+    throw error
+  }
 }
 
-/** 新增：POST /zones/{zone_id}/rate_limits */
-export function createRateLimit(
+/** 列表：GET .../phases/http_ratelimit/entrypoint */
+export async function listRateLimits(
+  ctx: CfRequestContext,
+  zoneId: string
+): Promise<RateLimitRule[]> {
+  const rs = await getRateLimitRuleset(ctx, zoneId)
+  return (rs?.rules ?? []).filter((r) => r.ratelimit)
+}
+
+/** 新增规则（入口 ruleset 不存在时自动创建，将首条规则一并写入） */
+export async function createRateLimit(
   ctx: CfRequestContext,
   zoneId: string,
-  payload: RateLimitPayload
-): Promise<CfRateLimit> {
-  return cfResult<CfRateLimit>(ctx, {
-    method: 'POST',
-    url: `/zones/${zoneId}/rate_limits`,
-    data: payload
+  rule: Omit<RateLimitRule, 'id'>
+): Promise<RateLimitRule> {
+  const rs = await getRateLimitRuleset(ctx, zoneId)
+  if (rs) {
+    return cfResult<RateLimitRule>(ctx, {
+      method: 'POST',
+      url: `/zones/${zoneId}/rulesets/${rs.id}/rules`,
+      data: rule
+    })
+  }
+  // PUT 阶段入口可自动创建 entry point ruleset
+  const created = await cfResult<{ rules?: RateLimitRule[] }>(ctx, {
+    method: 'PUT',
+    url: `/zones/${zoneId}/rulesets/phases/${RATE_LIMIT_PHASE}/entrypoint`,
+    data: { rules: [rule as RateLimitRule] }
   })
+  return created?.rules?.[0] ?? (rule as RateLimitRule)
 }
 
-/** 修改：PUT /zones/{zone_id}/rate_limits/{rule_id} */
-export function updateRateLimit(
+/** 修改规则：PUT .../rulesets/{ruleset_id}/rules/{rule_id} */
+export async function updateRateLimit(
   ctx: CfRequestContext,
   zoneId: string,
   ruleId: string,
-  payload: RateLimitPayload
-): Promise<CfRateLimit> {
-  return cfResult<CfRateLimit>(ctx, {
+  patch: Partial<RateLimitRule>
+): Promise<RateLimitRule> {
+  const rs = await getRateLimitRuleset(ctx, zoneId)
+  if (!rs) throw new Error('速率限制规则集不存在，请先新增规则')
+  return cfResult<RateLimitRule>(ctx, {
     method: 'PUT',
-    url: `/zones/${zoneId}/rate_limits/${ruleId}`,
-    data: payload
+    url: `/zones/${zoneId}/rulesets/${rs.id}/rules/${ruleId}`,
+    data: patch
   })
 }
 
-/** 删除：DELETE /zones/{zone_id}/rate_limits/{rule_id} */
-export function deleteRateLimit(
+/** 删除规则：DELETE .../rulesets/{ruleset_id}/rules/{rule_id} */
+export async function deleteRateLimit(
   ctx: CfRequestContext,
   zoneId: string,
   ruleId: string
-): Promise<{ id: string }> {
-  return cfResult<{ id: string }>(ctx, {
+): Promise<void> {
+  const rs = await getRateLimitRuleset(ctx, zoneId)
+  if (!rs) return
+  await cfResult<unknown>(ctx, {
     method: 'DELETE',
-    url: `/zones/${zoneId}/rate_limits/${ruleId}`
+    url: `/zones/${zoneId}/rulesets/${rs.id}/rules/${ruleId}`
   })
 }
 
@@ -207,7 +284,7 @@ export async function getZoneWafSummary(
 ): Promise<{ accessRules: number; rateLimits: number; rulesets: number }> {
   const [access, limits, rulesets] = await Promise.all([
     listAccessRules(ctx, zoneId),
-    listRateLimits(ctx, zoneId).catch(() => [] as CfRateLimit[]),
+    listRateLimits(ctx, zoneId).catch(() => [] as RateLimitRule[]),
     listZoneRulesets(ctx, zoneId).catch(() => [] as CfRuleset[])
   ])
   return {

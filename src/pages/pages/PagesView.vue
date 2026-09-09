@@ -21,17 +21,25 @@
     <!-- 桌面表格 -->
     <template v-if="isDesktop">
       <el-table :data="filteredProjects" v-loading="resourceStore.pages.loading" class="project-table">
-        <el-table-column label="项目名称" min-width="220">
+        <el-table-column label="项目名称" min-width="200">
           <template #default="{ row }">
             <span class="project-name cp-text-bold">{{ row.name }}</span>
-            <div class="cp-text-sm cp-text-secondary">
-              <span v-if="row.domains?.length" class="cp-mono">{{ row.domains[0] }}</span>
-              <span v-else>{{ row.subdomain ?? '-' }}</span>
-            </div>
           </template>
         </el-table-column>
-        <el-table-column label="账号" min-width="150">
-          <template #default="{ row }">{{ accountName(row.__accountId) }}</template>
+        <el-table-column label="账号 / 域名" min-width="220">
+          <template #default="{ row }">
+            <div class="project-acc">{{ accountName(row.__accountId) }}</div>
+            <a
+              v-if="projectLink(row as CfPagesProject)"
+              :href="projectLink(row as CfPagesProject)"
+              target="_blank"
+              rel="noopener"
+              class="cp-link cp-text-sm"
+            >
+              {{ projectLinkLabel(row as CfPagesProject) }}
+            </a>
+            <span v-else class="cp-text-secondary cp-text-sm">-</span>
+          </template>
         </el-table-column>
         <el-table-column label="生产分支" width="120">
           <template #default="{ row }">{{ row.production_branch ?? '-' }}</template>
@@ -71,7 +79,19 @@
             </el-tag>
           </div>
           <div class="cp-list-card__row"><span>账号</span><span>{{ accountName(row.__accountId) }}</span></div>
-          <div class="cp-list-card__row"><span>域名</span><span class="cp-ellipsis">{{ row.domains?.length ? row.domains[0] : row.subdomain ?? '-' }}</span></div>
+          <div class="cp-list-card__row">
+            <span>域名</span>
+            <a
+              v-if="projectLink(row as CfPagesProject)"
+              :href="projectLink(row as CfPagesProject)"
+              target="_blank"
+              rel="noopener"
+              class="cp-link cp-ellipsis"
+            >
+              {{ projectLinkLabel(row as CfPagesProject) }}
+            </a>
+            <span v-else>-</span>
+          </div>
           <div class="cp-list-card__actions">
             <van-button size="mini" type="primary" plain @click.stop="openProjectDialog(row)">编辑</van-button>
             <van-button size="mini" type="danger" plain @click.stop="removeProject(row)">删除</van-button>
@@ -150,7 +170,23 @@
       <template v-if="detailProject">
         <div class="detail-head">
           <div class="detail-head__item"><span>账号</span><b>{{ accountName(detailProject.__accountId) }}</b></div>
-          <div class="detail-head__item"><span>域名</span><b>{{ detailProject.domains?.length ? detailProject.domains.join(', ') : detailProject.subdomain ?? '-' }}</b></div>
+          <div class="detail-head__item">
+            <span>域名</span>
+            <span v-if="detailProjectLinks().length" class="dd-links">
+              <a
+                v-for="link in detailProjectLinks()"
+                :key="link.label"
+                :href="link.href"
+                target="_blank"
+                rel="noopener"
+                class="cp-link"
+              >
+                {{ link.label }}
+                <el-tag v-if="link.isDefault" size="small" effect="plain" type="info" class="default-tag">默认</el-tag>
+              </a>
+            </span>
+            <b v-else>-</b>
+          </div>
           <div class="detail-head__item"><span>生产分支</span><b>{{ detailProject.production_branch ?? '-' }}</b></div>
         </div>
         <el-tabs v-model="detailTab" class="detail-tabs">
@@ -321,6 +357,7 @@ import { buildRequestContext } from '@/store/credentialService'
 import * as pagesApi from '@/api/pages'
 import * as dnsApi from '@/api/dns'
 import { toBase64 } from '@/utils/crypto'
+import { runWithConcurrency } from '@/utils/scheduler'
 import { formatRelative, formatTime } from '@/utils/format'
 import type { CfPagesDeployment, CfPagesDomain, CfPagesProject } from '@/types'
 
@@ -344,6 +381,62 @@ const filteredProjects = computed(() => {
 function accountName(accountId?: string): string {
   if (!accountId) return '-'
   return accountStore.accounts.find((a) => a.id === accountId)?.name ?? `未知账号(${accountId.slice(0, 6)})`
+}
+
+/* ---------------- 列表域名链接：自定义域名优先，否则默认 pages.dev ---------------- */
+/** 账号全部项目的真实自定义域名：projectName -> domains[]（列表接口的 domains 字段可能为空，独立拉取保证准确） */
+const projectDomains = ref(new Map<string, string[]>())
+
+async function loadDomainsForList() {
+  const accs = accountStore.accounts.filter((a) => !!a.cfAccountId)
+  const map = new Map<string, string[]>()
+  await runWithConcurrency(accs, 3, async (account) => {
+    try {
+      const ctx = await buildRequestContext(account)
+      const projects = resourceStore.pages.rows.filter((p) => p.__accountId === account.id)
+      await runWithConcurrency(projects, 3, async (project) => {
+        try {
+          const domains = await pagesApi.listPagesDomains(ctx, account.cfAccountId!, project.name)
+          const names = domains.map((d) => d.name).filter(Boolean)
+          if (names.length) map.set(project.name, names)
+        } catch {
+          /* 单个项目域名读取失败忽略 */
+        }
+      })
+    } catch {
+      /* 忽略单个账号失败 */
+    }
+  })
+  projectDomains.value = map
+}
+
+/** 项目实际自定义域名：优先独立拉取结果，其次列表数据，最后回退空 */
+function effectiveDomains(row: CfPagesProject): string[] {
+  return projectDomains.value.get(row.name) ?? row.domains ?? []
+}
+
+/** 列表行链接：优先自定义域名，否则默认 pages.dev 子域名 */
+function projectLink(row: CfPagesProject): string {
+  const host = effectiveDomains(row)[0] ?? row.subdomain ?? ''
+  return host ? `https://${host}` : ''
+}
+
+function projectLinkLabel(row: CfPagesProject): string {
+  return effectiveDomains(row)[0] ?? (row.subdomain ?? '-')
+}
+
+/** 部署弹窗域名列表：展示全部自定义域名 + 默认 pages.dev 子域名 */
+function detailProjectLinks(): Array<{ label: string; href: string; isDefault?: boolean }> {
+  const names = pageDomains.value.map((d) => d.name).filter(Boolean)
+  const hosts: Array<{ label: string; isDefault: boolean }> = names.map((name) => ({
+    label: name,
+    isDefault: false
+  }))
+  const sub = detailProject.value?.subdomain
+  if (sub && !names.includes(sub)) {
+    hosts.push({ label: sub, isDefault: true })
+  }
+  return hosts.map((host) => ({ label: host.label, href: `https://${host.label}`, isDefault: host.isDefault }))
 }
 
 function stageLabel(status?: string): string {
@@ -426,6 +519,7 @@ function deploymentDuration(dep: CfPagesDeployment): string {
 
 async function onRefresh() {
   await resourceStore.loadPages(true)
+  await loadDomainsForList()
 }
 
 /* ---------------- 项目 CRUD ---------------- */
@@ -835,6 +929,7 @@ async function saveDomain() {
     await loadDomains()
     ElMessage.success(`域名 ${name} 已绑定${dnsMessage}`)
     await resourceStore.loadPages(true)
+    await loadDomainsForList()
     detailProject.value =
       resourceStore.pages.rows.find((p) => p.name === project.name) ?? detailProject.value
     await logStore.write({
@@ -866,6 +961,7 @@ async function removeDomain(domain: CfPagesDomain) {
     await loadDomains()
     ElMessage.success('已删除')
     await resourceStore.loadPages(true)
+    await loadDomainsForList()
     detailProject.value =
       resourceStore.pages.rows.find((p) => p.name === project.name) ?? detailProject.value
     await logStore.write({
@@ -947,6 +1043,7 @@ onMounted(async () => {
   if (!resourceStore.pages.loaded) {
     await resourceStore.loadPages()
   }
+  await loadDomainsForList()
 })
 </script>
 
@@ -965,9 +1062,43 @@ onMounted(async () => {
   @include card;
 }
 
+.cp-link {
+  color: var(--cp-primary);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  @include ellipsis(1);
+  max-width: 100%;
+}
+
+.dd-links {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+
+  .cp-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+  }
+
+  .default-tag {
+    flex: none;
+  }
+}
+
 .project-name {
   color: var(--cp-primary);
   font-size: 13.5px;
+}
+
+.project-acc {
+  color: var(--cp-text-secondary);
 }
 
 .detail-head {

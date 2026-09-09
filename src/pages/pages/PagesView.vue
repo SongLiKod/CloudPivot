@@ -153,63 +153,115 @@
           <div class="detail-head__item"><span>域名</span><b>{{ detailProject.domains?.length ? detailProject.domains.join(', ') : detailProject.subdomain ?? '-' }}</b></div>
           <div class="detail-head__item"><span>生产分支</span><b>{{ detailProject.production_branch ?? '-' }}</b></div>
         </div>
-        <div class="deploy-actions">
-          <el-button type="primary" :loading="triggering" @click="triggerDeploy">触发构建</el-button>
-          <el-button type="primary" plain :loading="uploading" @click="pickUploadFolder">
-            <el-icon><Upload /></el-icon>上传部署
-          </el-button>
-          <el-button size="small" text @click="refreshDeployments">刷新</el-button>
-        </div>
-        <input
-          ref="uploadInput"
-          type="file"
-          multiple
-          webkitdirectory
-          style="display: none"
-          @change="onUploadFiles"
-        />
-        <div class="deploy-list" v-loading="deploymentsLoading">
-          <el-empty v-if="!deploymentsLoading && !deployments.length" description="暂无部署" />
-          <div v-for="dep in deployments" :key="dep.id" class="deploy-card">
-            <div class="deploy-card__head">
-              <el-tag size="small" effect="light" :type="stageTagType(dep.latest_stage?.status)">
-                {{ stageLabel(dep.latest_stage?.status) }}
-              </el-tag>
-              <el-tag v-if="deploymentBranch(dep)" size="small" effect="plain" type="info" class="deploy-card__branch">
-                <el-icon><Connection /></el-icon>{{ deploymentBranch(dep) }}
-              </el-tag>
-              <span class="deploy-card__source cp-text-sm cp-text-secondary">{{ sourceLabel(dep) }}</span>
+        <el-tabs v-model="detailTab" class="detail-tabs">
+          <el-tab-pane label="部署" name="deploys">
+            <div class="deploy-actions">
+              <el-button type="primary" :loading="triggering" @click="triggerDeploy">触发构建</el-button>
+              <el-button type="primary" plain :loading="uploading" @click="pickUploadFolder">
+                <el-icon><Upload /></el-icon>上传部署
+              </el-button>
+              <el-button size="small" text @click="refreshDeployments">刷新</el-button>
+            </div>
+            <input
+              ref="uploadInput"
+              type="file"
+              multiple
+              webkitdirectory
+              style="display: none"
+              @change="onUploadFiles"
+            />
+            <div class="deploy-list" v-loading="deploymentsLoading">
+              <el-empty v-if="!deploymentsLoading && !deployments.length" description="暂无部署" />
+              <div v-for="dep in deployments" :key="dep.id" class="deploy-card">
+                <div class="deploy-card__head">
+                  <el-tag size="small" effect="light" :type="stageTagType(dep.latest_stage?.status)">
+                    {{ stageLabel(dep.latest_stage?.status) }}
+                  </el-tag>
+                  <el-tag v-if="deploymentBranch(dep)" size="small" effect="plain" type="info" class="deploy-card__branch">
+                    <el-icon><Connection /></el-icon>{{ deploymentBranch(dep) }}
+                  </el-tag>
+                  <span class="deploy-card__source cp-text-sm cp-text-secondary">{{ sourceLabel(dep) }}</span>
+                  <div class="cp-flex-1"></div>
+                  <span class="deploy-card__time cp-text-sm cp-text-secondary" :title="formatTime(dep.created_on, false)">
+                    {{ formatRelative(dep.created_on) }}
+                  </span>
+                </div>
+                <div v-if="deploymentCommit(dep)" class="deploy-card__commit">
+                  <span class="cp-ellipsis">{{ deploymentCommit(dep)!.message }}</span>
+                  <span v-if="deploymentCommit(dep)!.hash" class="cp-mono cp-text-secondary commit-hash">
+                    @{{ deploymentCommit(dep)!.hash!.slice(0, 7) }}
+                  </span>
+                </div>
+                <div class="deploy-card__meta">
+                  <a
+                    v-if="deploymentLink(dep)"
+                    :href="deploymentLink(dep)"
+                    target="_blank"
+                    rel="noopener"
+                    class="cp-mono cp-ellipsis cp-link"
+                  >
+                    <el-icon><Link /></el-icon>{{ deploymentLink(dep) }}
+                  </a>
+                  <span v-if="deploymentDuration(dep)" class="cp-text-sm cp-text-secondary">耗时 {{ deploymentDuration(dep) }}</span>
+                </div>
+                <div class="deploy-card__foot">
+                  <el-button size="small" text type="primary" @click="viewLogs(dep as CfPagesDeployment)">日志</el-button>
+                  <el-button size="small" text @click="retryDeploy(dep as CfPagesDeployment)">重试</el-button>
+                  <div class="cp-flex-1"></div>
+                  <span class="cp-mono cp-text-sm cp-text-secondary">{{ dep.id.slice(0, 12) }}…</span>
+                </div>
+              </div>
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane label="自定义域名" name="domains">
+            <el-alert v-if="domainsError" :title="domainsError" type="error" :closable="false" show-icon class="cp-alert-row" />
+            <div class="domain-bar">
+              <span class="cp-text-sm cp-text-secondary">共 {{ pageDomains.length }} 个自定义域名</span>
               <div class="cp-flex-1"></div>
-              <span class="deploy-card__time cp-text-sm cp-text-secondary" :title="formatTime(dep.created_on, false)">
-                {{ formatRelative(dep.created_on) }}
-              </span>
+              <el-button type="primary" @click="openDomainDialog()">
+                <el-icon><Plus /></el-icon>新增域名
+              </el-button>
             </div>
-            <div v-if="deploymentCommit(dep)" class="deploy-card__commit">
-              <span class="cp-ellipsis">{{ deploymentCommit(dep)!.message }}</span>
-              <span v-if="deploymentCommit(dep)!.hash" class="cp-mono cp-text-secondary commit-hash">
-                @{{ deploymentCommit(dep)!.hash!.slice(0, 7) }}
-              </span>
-            </div>
-            <div class="deploy-card__meta">
-              <a
-                v-if="deploymentLink(dep)"
-                :href="deploymentLink(dep)"
-                target="_blank"
-                rel="noopener"
-                class="cp-mono cp-ellipsis cp-link"
-              >
-                <el-icon><Link /></el-icon>{{ deploymentLink(dep) }}
-              </a>
-              <span v-if="deploymentDuration(dep)" class="cp-text-sm cp-text-secondary">耗时 {{ deploymentDuration(dep) }}</span>
-            </div>
-            <div class="deploy-card__foot">
-              <el-button size="small" text type="primary" @click="viewLogs(dep as CfPagesDeployment)">日志</el-button>
-              <el-button size="small" text @click="retryDeploy(dep as CfPagesDeployment)">重试</el-button>
-              <div class="cp-flex-1"></div>
-              <span class="cp-mono cp-text-sm cp-text-secondary">{{ dep.id.slice(0, 12) }}…</span>
-            </div>
-          </div>
-        </div>
+            <template v-if="isDesktop">
+              <el-empty v-if="!domainsError && !pageDomains.length" description="暂无自定义域名" />
+              <el-table :data="pageDomains" v-loading="domainsLoading" class="domain-table">
+                <el-table-column label="主机名" min-width="200">
+                  <template #default="{ row }"><span class="cp-mono">{{ row.name }}</span></template>
+                </el-table-column>
+                <el-table-column label="状态" width="120">
+                  <template #default="{ row }">
+                    <el-tag size="small" effect="light" :type="domainStatusTagType(row.status)">{{ domainStatusLabel(row.status) }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="所属域名" min-width="160">
+                  <template #default="{ row }">{{ row.zone_name ?? '-' }}</template>
+                </el-table-column>
+                <el-table-column label="创建时间" min-width="160">
+                  <template #default="{ row }">{{ formatTime(row.created_on, false) }}</template>
+                </el-table-column>
+                <el-table-column label="操作" width="110" fixed="right">
+                  <template #default="{ row }">
+                    <el-button size="small" text type="danger" @click="removeDomain(row as CfPagesDomain)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </template>
+            <template v-else>
+              <el-empty v-if="!domainsError && !pageDomains.length" description="暂无自定义域名" />
+              <div v-for="d in pageDomains" :key="d.id" class="cp-list-card">
+                <div class="cp-list-card__head">
+                  <span class="cp-list-card__title cp-mono">{{ d.name }}</span>
+                  <el-tag size="small" effect="light" :type="domainStatusTagType(d.status)">{{ domainStatusLabel(d.status) }}</el-tag>
+                </div>
+                <div class="cp-list-card__row"><span>所属域名</span><span>{{ d.zone_name ?? '-' }}</span></div>
+                <div class="cp-list-card__actions">
+                  <van-button size="mini" type="danger" plain @click="removeDomain(d as CfPagesDomain)">删除</van-button>
+                </div>
+              </div>
+            </template>
+          </el-tab-pane>
+        </el-tabs>
       </template>
     </el-dialog>
 
@@ -225,6 +277,35 @@
         </template>
       </div>
     </el-dialog>
+
+    <!-- 绑定自定义域名 -->
+    <el-dialog
+      :model-value="domainDialogVisible"
+      title="绑定自定义域名"
+      width="480px"
+      :append-to-body="true"
+      @close="domainDialogVisible = false"
+    >
+      <el-form label-width="70px" label-position="left">
+        <el-form-item label="托管域名">
+          <el-select v-model="domainForm.zoneId" style="width: 100%" filterable placeholder="选择已托管的 Cloudflare 域名">
+            <el-option v-for="z in projectZones" :key="z.id" :label="z.name" :value="z.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="子域名">
+          <el-input v-model="domainForm.subdomain" :placeholder="domainSubdomainPlaceholder" class="cp-mono" />
+        </el-form-item>
+      </el-form>
+      <div class="cp-text-sm cp-text-secondary" style="padding: 0 0 8px 70px">
+        将自动在该托管域名下创建 CNAME 解析记录（指向 {{ detailProject?.name }}.pages.dev）；子域名留空则绑定域名本身。
+      </div>
+      <template #footer>
+        <el-button @click="domainDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingDomain" :disabled="!domainForm.zoneId" @click="saveDomain">
+          绑定
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -238,9 +319,10 @@ import { useResourceStore } from '@/store/useResourceStore'
 import { useLogStore } from '@/store/useLogStore'
 import { buildRequestContext } from '@/store/credentialService'
 import * as pagesApi from '@/api/pages'
+import * as dnsApi from '@/api/dns'
 import { toBase64 } from '@/utils/crypto'
 import { formatRelative, formatTime } from '@/utils/format'
-import type { CfPagesDeployment, CfPagesProject } from '@/types'
+import type { CfPagesDeployment, CfPagesDomain, CfPagesProject } from '@/types'
 
 const { isDesktop, isMobile } = usePlatform()
 const accountStore = useAccountStore()
@@ -501,11 +583,14 @@ const deploymentsLoading = ref(false)
 const triggering = ref(false)
 const uploading = ref(false)
 const uploadInput = ref<HTMLInputElement | null>(null)
+const detailTab = ref('deploys')
 
 async function openDetail(project: CfPagesProject) {
   detailProject.value = project
+  detailTab.value = 'deploys'
   detailVisible.value = true
   await refreshDeployments()
+  await loadDomains()
 }
 
 function pickUploadFolder() {
@@ -624,6 +709,175 @@ async function refreshDeployments() {
     ElMessage.error((error as Error).message)
   } finally {
     deploymentsLoading.value = false
+  }
+}
+
+/* ---------------- 自定义域名 ---------------- */
+const pageDomains = ref<CfPagesDomain[]>([])
+const domainsLoading = ref(false)
+const domainsError = ref('')
+const domainDialogVisible = ref(false)
+const savingDomain = ref(false)
+const domainForm = reactive({ subdomain: '', zoneId: '' })
+
+/** 当前项目的可用 Cloudflare 托管域名 */
+const projectZones = computed(() =>
+  resourceStore.zones.rows.filter(
+    (z) =>
+      (accountStore.resolveAccount(z.__accountId) ?? accountStore.resolveAccount(z.account?.id))?.id ===
+      detailProject.value?.__accountId
+  )
+)
+
+/** 子域名输入占位 */
+const domainSubdomainPlaceholder = computed(() => {
+  const zone = projectZones.value.find((z) => z.id === domainForm.zoneId)
+  return zone ? `留空绑定 ${zone.name}，或填子域名前缀` : '留空绑定域名本身，或填子域名前缀'
+})
+
+function domainStatusLabel(status?: string): string {
+  switch (status) {
+    case 'active':
+    case 'active_redeploy':
+      return '生效'
+    case 'pending':
+    case 'pending_validation':
+    case 'pending_deployment':
+    case 'initializing':
+      return '处理中'
+    case 'error':
+    case 'validation_timed_out':
+    case 'deployment_failed':
+      return '异常'
+    case 'deleted':
+      return '已删除'
+    default:
+      return status ?? '-'
+  }
+}
+
+function domainStatusTagType(status?: string): 'success' | 'primary' | 'warning' | 'danger' | 'info' {
+  if (status === 'active' || status === 'active_redeploy') return 'success'
+  if (status === 'deleted') return 'info'
+  if (status === 'error' || status === 'validation_timed_out' || status === 'deployment_failed') return 'danger'
+  if (status === 'pending' || status === 'initializing') return 'warning'
+  return 'primary'
+}
+
+async function loadDomains() {
+  const project = detailProject.value
+  const account = project ? accountStore.accounts.find((a) => a.id === project.__accountId) : undefined
+  if (!project || !account) return
+  domainsLoading.value = true
+  domainsError.value = ''
+  try {
+    if (!account.cfAccountId) {
+      domainsError.value = '账号未绑定 Cloudflare 账号 ID，请先在「账号管理」执行「拉取资源」'
+      pageDomains.value = []
+      return
+    }
+    const ctx = await buildRequestContext(account)
+    pageDomains.value = await pagesApi.listPagesDomains(ctx, account.cfAccountId, project.name)
+  } catch (error) {
+    domainsError.value = (error as Error).message
+    pageDomains.value = []
+  } finally {
+    domainsLoading.value = false
+  }
+}
+
+function openDomainDialog() {
+  domainForm.subdomain = ''
+  domainForm.zoneId = projectZones.value[0]?.id ?? ''
+  if (!resourceStore.zones.loaded) {
+    void resourceStore.loadZones(true).then(() => {
+      domainForm.zoneId = domainForm.zoneId || (projectZones.value[0]?.id ?? '')
+    })
+  }
+  domainDialogVisible.value = true
+}
+
+async function saveDomain() {
+  const project = detailProject.value
+  const account = project ? accountStore.accounts.find((a) => a.id === project.__accountId) : undefined
+  if (!project || !account) return
+  // 仅支持绑定已托管的 Cloudflare 域名：所属域名必选，主机名 = 子域名前缀 + 托管域名
+  const zone = resourceStore.zones.rows.find((z) => z.id === domainForm.zoneId)
+  if (!zone) {
+    ElMessage.warning('请选择托管的所属域名')
+    return
+  }
+  const sub = domainForm.subdomain.trim()
+  const name = sub ? `${sub}.${zone.name}` : zone.name
+  if (!account.cfAccountId) {
+    ElMessage.warning('账号未回填 Cloudflare 账号 ID，请先在「账号管理」拉取资源')
+    return
+  }
+  savingDomain.value = true
+  try {
+    const ctx = await buildRequestContext(account)
+    await pagesApi.createPagesDomain(ctx, account.cfAccountId, project.name, name)
+    // 自动在该托管域名下创建 CNAME 解析记录（<主机名> → <项目名>.pages.dev）
+    let dnsMessage = ''
+    try {
+      await dnsApi.createDnsRecord(ctx, zone.id, {
+        type: 'CNAME',
+        name,
+        content: `${project.name}.pages.dev`,
+        proxied: true,
+        ttl: 1,
+        comment: `Pages 自定义域名 · ${project.name}`
+      })
+    } catch (error) {
+      dnsMessage = `，但自动创建 DNS 记录失败：${(error as Error).message}`
+    }
+    domainDialogVisible.value = false
+    await loadDomains()
+    ElMessage.success(`域名 ${name} 已绑定${dnsMessage}`)
+    await resourceStore.loadPages(true)
+    detailProject.value =
+      resourceStore.pages.rows.find((p) => p.name === project.name) ?? detailProject.value
+    await logStore.write({
+      module: 'pages',
+      action: '绑定自定义域名',
+      detail: `为 Pages 项目「${project.name}」绑定域名 ${name}`,
+      accountId: account.id,
+      accountName: account.name
+    })
+  } catch (error) {
+    ElMessage.error((error as Error).message)
+  } finally {
+    savingDomain.value = false
+  }
+}
+
+async function removeDomain(domain: CfPagesDomain) {
+  const project = detailProject.value
+  const account = project ? accountStore.accounts.find((a) => a.id === project.__accountId) : undefined
+  if (!project || !account) return
+  await ElMessageBox.confirm(`删除自定义域名「${domain.name}」？`, '删除域名', {
+    type: 'warning',
+    confirmButtonText: '删除',
+    cancelButtonText: '取消'
+  })
+  try {
+    const ctx = await buildRequestContext(account)
+    await pagesApi.deletePagesDomain(ctx, account.cfAccountId ?? '', project.name, domain.name)
+    await loadDomains()
+    ElMessage.success('已删除')
+    await resourceStore.loadPages(true)
+    detailProject.value =
+      resourceStore.pages.rows.find((p) => p.name === project.name) ?? detailProject.value
+    await logStore.write({
+      module: 'pages',
+      action: '删除自定义域名',
+      detail: `删除 Pages 项目「${project.name}」域名 ${domain.name}`,
+      level: 'warning',
+      accountId: account.id,
+      accountName: account.name
+    })
+  } catch (error) {
+    ElMessage.error((error as Error).message)
   }
 }
 
@@ -746,6 +1000,25 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+.detail-tabs {
+  margin-top: 6px;
+
+  :deep(.el-tabs__header) {
+    margin-bottom: 10px;
+  }
+}
+
+.domain-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+
+.domain-table {
+  @include card;
 }
 
 .log-viewer {

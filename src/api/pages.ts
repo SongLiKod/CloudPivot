@@ -2,7 +2,7 @@
  * Cloudflare Pages 接口（技术文档 §4.5）
  */
 import { cfResult, CF_API_BASE, type CfRequestContext } from './client'
-import type { CfPagesDeployment, CfPagesProject } from '@/types'
+import type { CfPagesDeployment, CfPagesDomain, CfPagesProject } from '@/types'
 /** 项目列表：GET /accounts/{account_id}/pages/projects（Pages 接口不接受 per_page/page，需不带分页参数） */
 export function listPagesProjects(
   ctx: CfRequestContext,
@@ -160,6 +160,51 @@ export function retryPagesDeployment(
       projectName
     )}/deployments/${deploymentId}/retry`,
     data: {}
+  })
+}
+
+/* ------------------------------------------------------------------ */
+/* 自定义域名（Custom Domains）                                        */
+/* ------------------------------------------------------------------ */
+
+/** 自定义域名列表：GET /accounts/{account_id}/pages/projects/{project_name}/domains（Pages 接口不接受 per_page/page，需不带分页参数） */
+export function listPagesDomains(
+  ctx: CfRequestContext,
+  accountId: string,
+  projectName: string
+): Promise<CfPagesDomain[]> {
+  return cfResult<CfPagesDomain[]>(ctx, {
+    method: 'GET',
+    url: `/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}/domains`
+  })
+}
+
+/** 添加自定义域名（Pages 域名接口仅支持 POST，zone 归属由 Cloudflare 自动判定）：POST .../domains */
+export function createPagesDomain(
+  ctx: CfRequestContext,
+  accountId: string,
+  projectName: string,
+  name: string
+): Promise<CfPagesDomain> {
+  return cfResult<CfPagesDomain>(ctx, {
+    method: 'POST',
+    url: `/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}/domains`,
+    data: { name }
+  })
+}
+
+/** 删除自定义域名：DELETE .../domains/{domain_name} */
+export function deletePagesDomain(
+  ctx: CfRequestContext,
+  accountId: string,
+  projectName: string,
+  domainName: string
+): Promise<unknown> {
+  return cfResult<unknown>(ctx, {
+    method: 'DELETE',
+    url: `/accounts/${accountId}/pages/projects/${encodeURIComponent(
+      projectName
+    )}/domains/${encodeURIComponent(domainName)}`
   })
 }
 

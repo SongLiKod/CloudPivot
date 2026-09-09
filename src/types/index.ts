@@ -229,6 +229,27 @@ export interface CfWorkerContent {
   modules?: { name: string; type: string; content?: string }[]
 }
 
+export interface CfPagesDomain {
+  id: string
+  name: string
+  /** active / pending / error / deleted … */
+  status: string
+  certificate_authority?: string
+  zone_tag?: string
+  zone_name?: string
+  domain_type?: string
+  validation_data?: {
+    status?: string
+    txt_name?: string
+    txt_value?: string
+    http_body?: string
+    http_url?: string
+    expires_on?: string
+  }
+  created_on?: string
+  __accountId?: string
+}
+
 export interface CfPagesProject {
   id?: string
   name: string

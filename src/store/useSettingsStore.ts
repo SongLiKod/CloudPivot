@@ -17,6 +17,7 @@ const CONFIG_KEY = 'systemConfig'
 
 export const DEFAULT_CONFIG: SystemConfig = {
   themeMode: 'system',
+  pageMode: 'single',
   syncInterval: 10,
   autoSyncEnabled: true,
   backupPath: '',

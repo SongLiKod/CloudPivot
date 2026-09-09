@@ -473,6 +473,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'WorkersView' })
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -483,6 +484,7 @@ import { useAccountStore } from '@/store/useAccountStore'
 import { useResourceStore } from '@/store/useResourceStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useLogStore } from '@/store/useLogStore'
+import { useTabStore } from '@/store/useTabStore'
 import { buildRequestContext } from '@/store/credentialService'
 import * as workersApi from '@/api/workers'
 import { formatTime } from '@/utils/format'
@@ -496,6 +498,7 @@ const accountStore = useAccountStore()
 const resourceStore = useResourceStore()
 const logStore = useLogStore()
 const settingsStore = useSettingsStore()
+const tabStore = useTabStore()
 
 const scriptName = computed(() => (route.params.script as string | undefined) ?? '')
 const accountIdQuery = computed(() => (route.query.accountId as string | undefined) ?? '')
@@ -1313,6 +1316,7 @@ onMounted(async () => {
   await loadDomainsForList()
   if (scriptName.value) {
     await loadDetail()
+    await tabStore.updateTitle(route.fullPath, scriptName.value)
   }
 })
 </script>

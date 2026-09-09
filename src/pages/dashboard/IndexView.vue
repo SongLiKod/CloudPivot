@@ -113,6 +113,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'DashboardView' })
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts/core'
 import { LineChart, BarChart } from 'echarts/charts'

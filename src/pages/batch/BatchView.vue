@@ -288,6 +288,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'BatchView' })
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'

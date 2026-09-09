@@ -453,6 +453,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'DnsView' })
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -462,6 +463,7 @@ import { useAccountStore } from '@/store/useAccountStore'
 import { useResourceStore } from '@/store/useResourceStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useLogStore } from '@/store/useLogStore'
+import { useTabStore } from '@/store/useTabStore'
 import { buildRequestContext } from '@/store/credentialService'
 import * as dnsApi from '@/api/dns'
 import * as zonesApi from '@/api/zones'
@@ -482,6 +484,7 @@ const accountStore = useAccountStore()
 const resourceStore = useResourceStore()
 const logStore = useLogStore()
 const settingsStore = useSettingsStore()
+const tabStore = useTabStore()
 
 const zoneId = computed(() => (route.params.zoneId as string | undefined) ?? '')
 
@@ -1116,6 +1119,10 @@ onMounted(async () => {
   }
   if (zoneId.value) {
     await reloadDns()
+    const zone = currentZone.value
+    if (zone?.name) {
+      await tabStore.updateTitle(route.fullPath, `${zone.name} · DNS`)
+    }
   } else {
     // 列表页：预加载全部解析记录（缓存优先），用于展示每个域名的记录条数
     await resourceStore.loadDns()

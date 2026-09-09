@@ -270,6 +270,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'AccountView' })
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePlatform } from '@/utils/platform'

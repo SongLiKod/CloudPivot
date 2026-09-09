@@ -8,6 +8,9 @@
 export type ThemeMode = 'system' | 'light' | 'dark'
 export type ResolvedTheme = 'light' | 'dark'
 
+/** 页面打开方式：单页显示 / 多标签页（仅桌面端生效） */
+export type PageMode = 'single' | 'multi'
+
 /* ------------------------------------------------------------------ */
 /* 账号                                                                */
 /* ------------------------------------------------------------------ */
@@ -475,6 +478,8 @@ export type SyncIntervalMinutes = 1 | 5 | 10 | 30
 
 export interface SystemConfig {
   themeMode: ThemeMode
+  /** 页面打开方式 */
+  pageMode: PageMode
   syncInterval: SyncIntervalMinutes
   autoSyncEnabled: boolean
   backupPath?: string
@@ -486,6 +491,18 @@ export interface SystemConfig {
   inspectionIntervalMinutes: number
   /** 列表是否显示序号 */
   showRowIndex: boolean
+}
+
+/** 已打开的多页签记录（持久化用于重启恢复） */
+export interface OpenedTabRecord {
+  /** 路由完整路径（路由 fullPath，作为页签唯一标识） */
+  fullPath: string
+  /** 路由路径 */
+  path: string
+  /** 页签标题 */
+  title: string
+  /** 固定页签（仪表盘），不允许关闭 */
+  affix?: boolean
 }
 
 /* ------------------------------------------------------------------ */

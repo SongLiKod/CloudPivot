@@ -24,6 +24,9 @@
         <el-button type="primary" @click="openZoneDialog">
           <el-icon><Plus /></el-icon>添加域名
         </el-button>
+        <el-button @click="openTemplateManager">
+          <el-icon><Collection /></el-icon>DNS 模板
+        </el-button>
         <el-button :loading="resourceStore.zones.loading" @click="onRefreshZones">刷新</el-button>
       </div>
 
@@ -333,6 +336,82 @@
       </template>
     </el-dialog>
 
+    <!-- 模板管理 -->
+    <el-dialog v-model="templateManageVisible" title="DNS 模板管理" width="660px" :append-to-body="true">
+      <div class="template-manager__bar">
+        <el-button size="small" type="primary" @click="openTemplateCreate">
+          <el-icon><Plus /></el-icon>新建模板
+        </el-button>
+        <span class="cp-text-sm cp-text-secondary">共 {{ templates.length }} 个模板</span>
+        <div class="cp-flex-1"></div>
+        <el-button size="small" text :loading="false" @click="loadTemplates">刷新</el-button>
+      </div>
+      <el-empty v-if="!templates.length" description="暂无 DNS 模板，可在域名解析页「保存为 DNS 模板」或点击上方新建" />
+      <el-table v-else :data="templates" class="tpl-table">
+        <el-table-column label="模板名称" min-width="180">
+          <template #default="{ row }"><b>{{ row.name }}</b></template>
+        </el-table-column>
+        <el-table-column label="记录数" width="80" align="center">
+          <template #default="{ row }">{{ row.records.length }}</template>
+        </el-table-column>
+        <el-table-column label="创建时间" min-width="160">
+          <template #default="{ row }">{{ formatTime(row.createdAt, false) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="200" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" text type="primary" @click="viewTemplateDetail(row as DnsTemplate)">明细</el-button>
+            <el-button size="small" text @click="openTemplateRename(row as DnsTemplate)">重命名</el-button>
+            <el-button size="small" text type="danger" @click="removeTemplate(row as DnsTemplate)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <!-- 模板明细 -->
+    <el-dialog v-model="templateDetailVisible" :title="`模板明细 · ${templateDetail?.name ?? ''}`" width="640px" :append-to-body="true">
+      <el-empty v-if="!templateDetail?.records.length" description="该模板暂无记录" />
+      <el-table v-else :data="templateDetail?.records ?? []" max-height="420" class="tpl-record-table">
+        <el-table-column label="类型" width="90">
+          <template #default="{ row }"><el-tag size="small" effect="plain">{{ row.type }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="名称" min-width="180">
+          <template #default="{ row }"><span class="cp-mono">{{ row.name }}</span></template>
+        </el-table-column>
+        <el-table-column label="内容" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }"><span class="cp-mono">{{ row.content }}</span></template>
+        </el-table-column>
+        <el-table-column label="TTL" width="80">
+          <template #default="{ row }">{{ formatTtl(row.ttl) }}</template>
+        </el-table-column>
+        <el-table-column label="代理" width="70">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.proxied ? 'success' : 'info'" effect="light">{{ row.proxied ? '开启' : '关闭' }}</el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <!-- 新建模板 -->
+    <el-dialog v-model="templateCreateVisible" title="新建 DNS 模板" width="400px" :append-to-body="true">
+      <el-input v-model="templateCreateName" placeholder="模板名称，例如：基础站点模板" />
+      <div class="cp-text-sm cp-text-secondary" style="margin-top: 8px">
+        新建的模板初始为空，可在某域名「保存为 DNS 模板」覆盖，或在批量任务中选择使用。
+      </div>
+      <template #footer>
+        <el-button @click="templateCreateVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="!templateCreateName.trim()" @click="saveTemplateCreate">创建</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 重命名模板 -->
+    <el-dialog v-model="templateRenameVisible" title="重命名模板" width="400px" :append-to-body="true">
+      <el-input v-model="templateRenameName" placeholder="模板名称" />
+      <template #footer>
+        <el-button @click="templateRenameVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="!templateRenameName.trim()" @click="saveTemplateRename">保存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 保存模板 -->
     <el-dialog v-model="templateSaveVisible" title="保存为 DNS 模板" width="360px" :append-to-body="true">
       <el-input v-model="templateName" placeholder="模板名称，例如：基础站点模板" />
@@ -377,7 +456,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, MoreFilled, Plus } from '@element-plus/icons-vue'
+import { ArrowLeft, Collection, MoreFilled, Plus } from '@element-plus/icons-vue'
 import { usePlatform } from '@/utils/platform'
 import { useAccountStore } from '@/store/useAccountStore'
 import { useResourceStore } from '@/store/useResourceStore'
@@ -389,7 +468,7 @@ import * as zonesApi from '@/api/zones'
 import type { CertificatePack } from '@/api/zones'
 import { formatTime, formatTtl } from '@/utils/format'
 import { runWithConcurrency } from '@/utils/scheduler'
-import { STORE, getAllRecords, putRecord } from '@/utils/db'
+import { STORE, deleteRecord, getAllRecords, putRecord } from '@/utils/db'
 import { randomId } from '@/utils/crypto'
 import type { CfDnsRecord, CfZone, CloudflareAccount, DnsRecordType, DnsTemplate } from '@/types'
 
@@ -915,6 +994,73 @@ async function saveTemplate() {
   ElMessage.success('模板已保存')
 }
 
+/* ---- 模板管理（列表 / 明细 / 新建 / 重命名 / 删除） ---- */
+const templateManageVisible = ref(false)
+const templateDetailVisible = ref(false)
+const templateDetail = ref<DnsTemplate | null>(null)
+const templateCreateVisible = ref(false)
+const templateCreateName = ref('')
+const templateRenameVisible = ref(false)
+const templateRenameTarget = ref<DnsTemplate | null>(null)
+const templateRenameName = ref('')
+
+function openTemplateManager() {
+  void loadTemplates()
+  templateManageVisible.value = true
+}
+
+function viewTemplateDetail(template: DnsTemplate) {
+  templateDetail.value = template
+  templateDetailVisible.value = true
+}
+
+function openTemplateCreate() {
+  templateCreateName.value = ''
+  templateCreateVisible.value = true
+}
+
+async function saveTemplateCreate() {
+  const name = templateCreateName.value.trim()
+  if (!name) return
+  const template: DnsTemplate = {
+    id: randomId('tpl'),
+    name,
+    records: [],
+    createdAt: Date.now()
+  }
+  await putRecord(STORE.template, template)
+  await loadTemplates()
+  templateCreateVisible.value = false
+  ElMessage.success('模板已创建')
+}
+
+function openTemplateRename(template: DnsTemplate) {
+  templateRenameTarget.value = template
+  templateRenameName.value = template.name
+  templateRenameVisible.value = true
+}
+
+async function saveTemplateRename() {
+  const target = templateRenameTarget.value
+  const name = templateRenameName.value.trim()
+  if (!target || !name) return
+  await putRecord(STORE.template, { ...target, name })
+  await loadTemplates()
+  templateRenameVisible.value = false
+  ElMessage.success('已重命名')
+}
+
+async function removeTemplate(template: DnsTemplate) {
+  await ElMessageBox.confirm(`删除模板「${template.name}」？此操作不可恢复。`, '删除模板', {
+    type: 'warning',
+    confirmButtonText: '删除',
+    cancelButtonText: '取消'
+  })
+  await deleteRecord(STORE.template, template.id)
+  await loadTemplates()
+  ElMessage.success('已删除')
+}
+
 async function applyTemplate(template: DnsTemplate) {
   const account = await currentContext()
   if (!account || !zoneId.value) {
@@ -989,8 +1135,17 @@ onMounted(async () => {
 }
 
 .zone-table,
-.record-table {
+.record-table,
+.tpl-table,
+.tpl-record-table {
   @include card;
+}
+
+.template-manager__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .ns-list {

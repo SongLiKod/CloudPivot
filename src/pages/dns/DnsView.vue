@@ -92,6 +92,22 @@
             </div>
             <div class="cp-list-card__row"><span>账号</span><span>{{ accountName(row.__accountId) }}</span></div>
             <div v-if="hasNonFreePlan" class="cp-list-card__row"><span>套餐</span><span>{{ row.plan?.name ?? '-' }}</span></div>
+            <div class="cp-list-card__row">
+              <span>Nameservers</span>
+              <span v-if="row.name_servers?.length" class="ns-list ns-card-list">
+                <el-tag
+                  v-for="(ns, index) in row.name_servers"
+                  :key="ns"
+                  size="small"
+                  effect="plain"
+                  class="ns-tag cp-mono"
+                  :type="nsTagType(index)"
+                >
+                  {{ ns }}
+                </el-tag>
+              </span>
+              <span v-else>-</span>
+            </div>
             <div class="cp-list-card__actions">
               <van-button size="mini" type="primary" plain @click.stop="togglePause(row)">{{ row.paused ? '恢复' : '暂停' }}</van-button>
               <van-button size="mini" type="danger" plain @click.stop="removeZone(row)">删除</van-button>
@@ -950,6 +966,11 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.ns-card-list {
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .ns-tag {

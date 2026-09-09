@@ -122,6 +122,7 @@
             <el-option label="删除 Worker 脚本" value="worker-delete" />
             <el-option label="重建 Pages 项目" value="pages-rebuild" />
           </el-select>
+          <div v-if="typeDescription" class="type-desc">{{ typeDescription }}</div>
         </el-form-item>
         <el-form-item label="目标账号">
           <el-select v-model="createAccounts" multiple filterable placeholder="选择一个或多个账号" style="width: 100%">
@@ -240,6 +241,16 @@ const TYPE_LABELS: Record<BatchTaskType, string> = {
 function typeLabel(type: BatchTaskType): string {
   return TYPE_LABELS[type] ?? type
 }
+
+/** 各任务类型用途说明（在新建任务弹窗展示） */
+const TYPE_DESCRIPTIONS: Partial<Record<BatchTaskType, string>> = {
+  'account-check': '逐个账号执行凭据校验，识别「正常 / 失效 / 权限不足 / 过期」等状态，结果写入任务明细。',
+  'account-refresh': '逐个账号重新拉取托管域名（Zone）、Worker 脚本与 Pages 项目列表，并更新资源统计与本地缓存。',
+  'worker-delete': '批量删除所选账号下勾选的 Worker 脚本。删除后脚本及其所有部署不可恢复，属高危操作。',
+  'pages-rebuild': '批量对所选 Pages 项目触发一次重新构建（按生产分支重新生成站点），常用于手动重建部署。'
+}
+
+const typeDescription = computed(() => TYPE_DESCRIPTIONS[createType.value] ?? '')
 
 const STATUS_LABELS: Record<string, string> = {
   pending: '等待',
@@ -591,6 +602,19 @@ onMounted(async () => {
 
 .type-tag {
   margin-right: 2px;
+}
+
+/* 新建任务弹窗：任务类型说明 */
+.type-desc {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: $radius-sm;
+  background: var(--cp-bg-sunken);
+  border: 1px dashed var(--cp-border-light);
+  color: var(--cp-text-secondary);
+  font-size: 12.5px;
+  line-height: 1.6;
 }
 
 .ok-text {

@@ -48,7 +48,7 @@
           <el-table-column label="账号" min-width="140">
             <template #default="{ row }">{{ accountName(row.__accountId) }}</template>
           </el-table-column>
-          <el-table-column label="套餐" width="110">
+          <el-table-column v-if="hasNonFreePlan" label="套餐" width="110">
             <template #default="{ row }">{{ row.plan?.name ?? '-' }}</template>
           </el-table-column>
           <el-table-column label="Nameservers" min-width="220">
@@ -80,7 +80,7 @@
               <el-tag size="small" effect="light" :type="zoneTagType(row.status)">{{ zoneStatusLabel(row) }}</el-tag>
             </div>
             <div class="cp-list-card__row"><span>账号</span><span>{{ accountName(row.__accountId) }}</span></div>
-            <div class="cp-list-card__row"><span>套餐</span><span>{{ row.plan?.name ?? '-' }}</span></div>
+            <div v-if="hasNonFreePlan" class="cp-list-card__row"><span>套餐</span><span>{{ row.plan?.name ?? '-' }}</span></div>
             <div class="cp-list-card__actions">
               <van-button size="mini" type="primary" plain @click.stop="togglePause(row)">{{ row.paused ? '恢复' : '暂停' }}</van-button>
               <van-button size="mini" type="danger" plain @click.stop="removeZone(row)">删除</van-button>
@@ -375,6 +375,11 @@ const filteredZones = computed(() => {
     return true
   })
 })
+
+/** 是否存在非 Free Website 套餐（存在时才显示“套餐”列） */
+const hasNonFreePlan = computed(() =>
+  filteredZones.value.some((z) => !z.plan || z.plan.name !== 'Free Website')
+)
 
 function accountName(accountId?: string): string {
   if (!accountId) return '-'

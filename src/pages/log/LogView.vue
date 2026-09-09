@@ -43,6 +43,7 @@
     <!-- 桌面表格 -->
     <template v-if="isDesktop">
       <el-table :data="logStore.rows" class="log-table" v-loading="logStore.loading" @row-click="openDetail">
+        <el-table-column v-if="settingsStore.config.showRowIndex" type="index" width="52" align="center" label="#" />
         <el-table-column label="时间" width="170">
           <template #default="{ row }"><span class="cp-text-sm">{{ formatTime(row.time, true) }}</span></template>
         </el-table-column>
@@ -151,12 +152,14 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { usePlatform } from '@/utils/platform'
 import { useAccountStore } from '@/store/useAccountStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import { useLogStore, type LogQuery } from '@/store/useLogStore'
 import { formatTime } from '@/utils/format'
 import type { LogLevel, OperationLog } from '@/types'
 
 const { isDesktop, isMobile } = usePlatform()
 const accountStore = useAccountStore()
+const settingsStore = useSettingsStore()
 const logStore = useLogStore()
 
 const MODULES = [

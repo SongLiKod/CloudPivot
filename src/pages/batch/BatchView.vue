@@ -31,6 +31,7 @@
     <!-- 桌面表格 -->
     <template v-if="isDesktop">
       <el-table :data="batchStore.tasks" class="task-table">
+        <el-table-column v-if="settingsStore.config.showRowIndex" type="index" width="52" align="center" label="#" />
         <el-table-column label="任务" min-width="240">
           <template #default="{ row }">
             <div class="task-title-row">
@@ -85,8 +86,9 @@
     <!-- 移动端列表 -->
     <template v-else>
       <el-empty v-if="!batchStore.tasks.length" description="暂无任务" />
-      <div v-for="row in batchStore.tasks" :key="row.id" class="cp-list-card">
+      <div v-for="(row, index) in batchStore.tasks" :key="row.id" class="cp-list-card">
         <div class="cp-list-card__head">
+          <span v-if="settingsStore.config.showRowIndex" class="list-index">{{ index + 1 }}</span>
           <span class="cp-list-card__title">{{ row.title }}</span>
           <el-tag size="small" effect="light" :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag>
         </div>
@@ -191,6 +193,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { usePlatform } from '@/utils/platform'
 import { useAccountStore } from '@/store/useAccountStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import { useBatchStore, type SubTaskEmit } from '@/store/useBatchStore'
 import { useResourceStore } from '@/store/useResourceStore'
 import { useLogStore } from '@/store/useLogStore'
@@ -202,6 +205,7 @@ import type { BatchSubTaskResult, BatchTask, BatchTaskType } from '@/types'
 
 const { isDesktop, isMobile } = usePlatform()
 const accountStore = useAccountStore()
+const settingsStore = useSettingsStore()
 const batchStore = useBatchStore()
 const resourceStore = useResourceStore()
 const logStore = useLogStore()

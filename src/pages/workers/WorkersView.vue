@@ -23,6 +23,7 @@
       <!-- 桌面表格 -->
       <template v-if="isDesktop">
         <el-table :data="filteredScripts" v-loading="resourceStore.workers.loading" class="script-table">
+          <el-table-column v-if="settingsStore.config.showRowIndex" type="index" width="52" align="center" label="#" />
           <el-table-column label="脚本名称" min-width="240">
             <template #default="{ row }">
               <router-link :to="detailLink(row as CfWorkerScript)" class="script-name cp-text-bold">{{ row.id }}</router-link>
@@ -62,9 +63,10 @@
       <!-- 移动端列表 -->
       <template v-else>
         <el-empty v-if="!filteredScripts.length" description="暂无 Worker 脚本" />
-        <template v-for="row in filteredScripts" :key="row.id">
+        <template v-for="(row, index) in filteredScripts" :key="row.id">
           <div class="cp-list-card" @click="goDetail(row)">
             <div class="cp-list-card__head">
+              <span v-if="settingsStore.config.showRowIndex" class="list-index">{{ index + 1 }}</span>
               <span class="cp-list-card__title cp-mono">{{ row.id }}</span>
               <el-tag size="small" effect="light" type="primary">Worker</el-tag>
             </div>
@@ -173,6 +175,7 @@
             </div>
             <el-empty v-if="!varsError && !bindings.length" description="暂无变量" />
             <el-table v-if="bindings.length || varsError" :data="bindings" v-loading="bindingsLoading" class="vars-table">
+              <el-table-column v-if="settingsStore.config.showRowIndex" type="index" width="52" align="center" label="#" />
               <el-table-column label="名称" min-width="180">
                 <template #default="{ row }"><span class="cp-mono">{{ row.binding ?? row.name }}</span></template>
               </el-table-column>
@@ -212,6 +215,7 @@
             </div>
             <el-empty v-if="!domainsError && !domains.length" description="暂无自定义域名" />
             <el-table :data="domains" v-loading="domainsLoading" class="routes-table">
+              <el-table-column v-if="settingsStore.config.showRowIndex" type="index" width="52" align="center" label="#" />
               <el-table-column label="主机名" min-width="220">
                 <template #default="{ row }"><span class="cp-mono">{{ row.hostname }}</span></template>
               </el-table-column>
@@ -243,6 +247,7 @@
             </div>
             <el-empty v-if="!routesError && !routes.length" description="暂无路由" />
             <el-table :data="routes" v-loading="routesLoading" class="routes-table">
+              <el-table-column v-if="settingsStore.config.showRowIndex" type="index" width="52" align="center" label="#" />
               <el-table-column label="匹配模式" min-width="220">
                 <template #default="{ row }"><span class="cp-mono">{{ row.pattern }}</span></template>
               </el-table-column>
@@ -476,6 +481,7 @@ import CodeEditor from '@/components/CodeEditor.vue'
 import { usePlatform } from '@/utils/platform'
 import { useAccountStore } from '@/store/useAccountStore'
 import { useResourceStore } from '@/store/useResourceStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import { useLogStore } from '@/store/useLogStore'
 import { buildRequestContext } from '@/store/credentialService'
 import * as workersApi from '@/api/workers'
@@ -489,6 +495,7 @@ const { isDesktop, isMobile } = usePlatform()
 const accountStore = useAccountStore()
 const resourceStore = useResourceStore()
 const logStore = useLogStore()
+const settingsStore = useSettingsStore()
 
 const scriptName = computed(() => (route.params.script as string | undefined) ?? '')
 const accountIdQuery = computed(() => (route.query.accountId as string | undefined) ?? '')

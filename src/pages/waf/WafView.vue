@@ -35,6 +35,7 @@
       <el-tabs v-if="isDesktop" v-model="activeTab">
         <el-tab-pane label="IP 访问规则" name="access">
           <el-table :data="accessRules" v-loading="ruleLoading" class="waf-table">
+            <el-table-column v-if="settingsStore.config.showRowIndex" type="index" width="52" align="center" label="#" />
             <el-table-column label="对象" min-width="200">
               <template #default="{ row }">
                 <el-tag size="small" effect="plain" :type="targetTagType(row.configuration?.target)" class="target-tag">
@@ -69,6 +70,7 @@
 
         <el-tab-pane label="速率限制" name="limits">
           <el-table :data="rateLimits" v-loading="ruleLoading" class="waf-table">
+            <el-table-column v-if="settingsStore.config.showRowIndex" type="index" width="52" align="center" label="#" />
             <el-table-column label="描述" min-width="180" show-overflow-tooltip>
               <template #default="{ row }">{{ row.description ?? '-' }}</template>
             </el-table-column>
@@ -111,8 +113,9 @@
           <van-tab title="IP 规则">
             <div class="tab-pad">
               <el-empty v-if="!accessRules.length" description="暂无 IP 访问规则" />
-              <div v-for="row in accessRules" :key="row.id" class="cp-list-card">
+              <div v-for="(row, index) in accessRules" :key="row.id" class="cp-list-card">
                 <div class="cp-list-card__head">
+                  <span v-if="settingsStore.config.showRowIndex" class="list-index">{{ index + 1 }}</span>
                   <span class="cp-text-sm">{{ targetLabel(row.configuration?.target) }}</span>
                   <el-tag size="small" effect="light" :type="modeTagType(row.mode)">{{ modeLabel(row.mode) }}</el-tag>
                   <el-tag v-if="isAccountRule(row as CfAccessRule)" size="small" effect="plain" type="info">账号级</el-tag>
@@ -129,8 +132,9 @@
           <van-tab title="速率限制">
             <div class="tab-pad">
               <el-empty v-if="!rateLimits.length" description="暂无速率限制规则" />
-              <div v-for="row in rateLimits" :key="row.id ?? row.expression" class="cp-list-card">
+              <div v-for="(row, index) in rateLimits" :key="row.id ?? row.expression" class="cp-list-card">
                 <div class="cp-list-card__head">
+                  <span v-if="settingsStore.config.showRowIndex" class="list-index">{{ index + 1 }}</span>
                   <span class="cp-list-card__title">{{ row.description ?? '未命名规则' }}</span>
                   <el-switch :model-value="row.enabled !== false" size="small" @change="(v: string | number | boolean) => toggleRateLimit(row, !!v)" />
                 </div>
@@ -277,6 +281,7 @@ import { Plus, Upload } from '@element-plus/icons-vue'
 import { usePlatform } from '@/utils/platform'
 import { useAccountStore } from '@/store/useAccountStore'
 import { useResourceStore } from '@/store/useResourceStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import { useLogStore } from '@/store/useLogStore'
 import { buildRequestContext } from '@/store/credentialService'
 import * as wafApi from '@/api/waf'
@@ -288,6 +293,7 @@ const { isDesktop, isMobile } = usePlatform()
 const accountStore = useAccountStore()
 const resourceStore = useResourceStore()
 const logStore = useLogStore()
+const settingsStore = useSettingsStore()
 
 const zoneId = ref('')
 const activeTab = ref('access')

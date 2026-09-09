@@ -32,6 +32,7 @@
       <!-- 桌面表格 -->
       <template v-if="isDesktop">
         <el-table :data="filteredZones" v-loading="resourceStore.zones.loading" class="zone-table">
+          <el-table-column v-if="settingsStore.config.showRowIndex" type="index" width="52" align="center" label="#" />
           <el-table-column label="域名" min-width="220">
             <template #default="{ row }">
               <router-link :to="`/dns/${row.id}`" class="zone-name cp-text-bold">{{ row.name }}</router-link>
@@ -91,9 +92,10 @@
       <!-- 移动端列表 -->
       <template v-else>
         <el-empty v-if="!filteredZones.length" description="暂无域名" />
-        <template v-for="row in filteredZones" :key="row.id">
+        <template v-for="(row, index) in filteredZones" :key="row.id">
           <div class="cp-list-card" @click="goDetail(row)">
             <div class="cp-list-card__head">
+              <span v-if="settingsStore.config.showRowIndex" class="list-index">{{ index + 1 }}</span>
               <span class="cp-list-card__title">{{ row.name }}</span>
               <el-tag size="small" effect="light" :type="zoneTagType(row.status)">{{ zoneStatusLabel(row) }}</el-tag>
             </div>
@@ -186,6 +188,7 @@
       <template v-if="isDesktop">
         <el-alert v-if="resourceStore.dns.error" :title="resourceStore.dns.error" type="error" :closable="false" show-icon class="cp-alert-row" />
         <el-table :data="filteredRecords" v-loading="dnsLoading" row-key="id" class="record-table" @selection-change="(rows: CfDnsRecord[]) => (selectedRecords = rows)">
+          <el-table-column v-if="settingsStore.config.showRowIndex" type="index" width="52" align="center" label="#" />
           <el-table-column type="selection" width="44" />
           <el-table-column label="名称" min-width="240">
             <template #default="{ row }">
@@ -229,8 +232,9 @@
         <van-pull-refresh v-model="pulling" @refresh="reloadDns">
           <el-alert v-if="resourceStore.dns.error" :title="resourceStore.dns.error" type="error" :closable="false" show-icon />
           <el-empty v-if="!filteredRecords.length" description="暂无解析记录" />
-          <div v-for="row in filteredRecords" :key="row.id" class="cp-list-card">
+          <div v-for="(row, index) in filteredRecords" :key="row.id" class="cp-list-card">
             <div class="cp-list-card__head">
+              <span v-if="settingsStore.config.showRowIndex" class="list-index">{{ index + 1 }}</span>
               <span class="cp-list-card__title">
                 <el-tag size="small" :type="recordTypeTag(row.type)" effect="plain" class="type-tag">{{ row.type }}</el-tag>
                 <span class="cp-mono cp-text-sm">{{ row.name }}</span>
@@ -377,6 +381,7 @@ import { ArrowLeft, MoreFilled, Plus } from '@element-plus/icons-vue'
 import { usePlatform } from '@/utils/platform'
 import { useAccountStore } from '@/store/useAccountStore'
 import { useResourceStore } from '@/store/useResourceStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import { useLogStore } from '@/store/useLogStore'
 import { buildRequestContext } from '@/store/credentialService'
 import * as dnsApi from '@/api/dns'
@@ -397,6 +402,7 @@ const { isDesktop, isMobile } = usePlatform()
 const accountStore = useAccountStore()
 const resourceStore = useResourceStore()
 const logStore = useLogStore()
+const settingsStore = useSettingsStore()
 
 const zoneId = computed(() => (route.params.zoneId as string | undefined) ?? '')
 

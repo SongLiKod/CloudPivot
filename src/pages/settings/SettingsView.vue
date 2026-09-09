@@ -53,6 +53,16 @@
           @update:model-value="settingsStore.update({ logRetentionDays: $event })"
         />
       </div>
+      <div class="setting-row">
+        <div class="setting-row__label">
+          <span>列表显示序号</span>
+          <span class="cp-text-sm cp-text-secondary">在各列表首列显示行号（账号 / 域名 / DNS / Worker / Pages / WAF / 日志）</span>
+        </div>
+        <el-switch
+          :model-value="settingsStore.config.showRowIndex"
+          @change="(v: string | number | boolean) => settingsStore.update({ showRowIndex: !!v })"
+        />
+      </div>
     </div>
 
     <!-- 巡检 -->

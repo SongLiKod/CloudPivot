@@ -275,6 +275,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'WafView' })
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Upload } from '@element-plus/icons-vue'

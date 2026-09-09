@@ -13,6 +13,24 @@
       </el-radio-group>
     </div>
 
+    <!-- 页面打开方式 -->
+    <div v-if="isDesktop" class="settings-group">
+      <div class="settings-group__title">
+        <el-icon><Grid /></el-icon>页面打开方式
+      </div>
+      <el-radio-group
+        :model-value="settingsStore.config.pageMode"
+        @update:model-value="onPageModeChange"
+        class="theme-radio"
+      >
+        <el-radio-button value="single">单页显示</el-radio-button>
+        <el-radio-button value="multi">多标签页</el-radio-button>
+      </el-radio-group>
+      <p style="margin: 12px 0 0" class="cp-text-sm cp-text-secondary">
+        多标签页：顶栏显示页签栏，可同时打开多个页面并保留各自状态（域名/DNS、Worker、Pages 详情等），关闭页签自动切换相邻页签，重启后恢复上次打开的页签。
+      </p>
+    </div>
+
     <!-- 通用 -->
     <div class="settings-group">
       <div class="settings-group__title">
@@ -369,9 +387,10 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'SettingsView' })
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Files, InfoFilled, Lock, Message, Monitor, Odometer, Setting, Sunny, WarningFilled } from '@element-plus/icons-vue'
+import { Files, Grid, InfoFilled, Lock, Message, Monitor, Odometer, Setting, Sunny, WarningFilled } from '@element-plus/icons-vue'
 import { isElectron, usePlatform } from '@/utils/platform'
 import { useThemeStore } from '@/store/useThemeStore'
 import { useSettingsStore, SYNC_INTERVAL_OPTIONS } from '@/store/useSettingsStore'
@@ -401,7 +420,7 @@ import {
   sendPinReminder,
   type EmailSettings
 } from '@/utils/emailService'
-import type { BackupPayload, SyncIntervalMinutes, ThemeMode } from '@/types'
+import type { BackupPayload, PageMode, SyncIntervalMinutes, ThemeMode } from '@/types'
 
 const { isDesktop, isMobile } = usePlatform()
 const themeStore = useThemeStore()
@@ -414,6 +433,18 @@ async function onThemeModeChange(mode: string | number | boolean | undefined) {
   const value = (mode ?? 'system') as ThemeMode
   await themeStore.setMode(value)
   await settingsStore.update({ themeMode: value })
+}
+
+/* ---------------- 页面打开方式 ---------------- */
+async function onPageModeChange(mode: string | number | boolean | undefined) {
+  const value = (mode ?? 'single') as PageMode
+  if (value === settingsStore.config.pageMode) return
+  await settingsStore.update({ pageMode: value })
+  await logStore.write({
+    module: 'system',
+    action: value === 'multi' ? '开启多标签页' : '切换为单页模式',
+    detail: value === 'multi' ? '页面打开方式切换为多标签页' : '页面打开方式切换为单页显示'
+  })
 }
 
 /* ---------------- 备份 / 还原 ---------------- */

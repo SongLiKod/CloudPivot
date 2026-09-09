@@ -85,11 +85,55 @@
         </div>
       </header>
 
+      <!-- 多标签页栏（仅桌面端且开启多标签模式） -->
+      <template v-if="isDesktop && tabStore.enabled">
+        <div class="page-tabs">
+          <div ref="tabsScroller" class="page-tabs__inner">
+            <div
+              v-for="tab in tabStore.tabs"
+              :key="tab.fullPath"
+              class="page-tabs__item"
+              :class="{ 'is-active': tab.fullPath === route.fullPath }"
+              :title="tab.title"
+              @click="goTab(tab)"
+            >
+              <span class="page-tabs__label">{{ tab.title }}</span>
+              <el-icon v-if="!tab.affix" class="page-tabs__close" @click.stop="closeTab(tab)">
+                <Close />
+              </el-icon>
+            </div>
+          </div>
+          <el-dropdown
+            class="page-tabs__more"
+            trigger="click"
+            :disabled="tabStore.tabs.length <= 1"
+            @command="onTabsCommand"
+          >
+            <div class="page-tabs__more-btn">
+              <el-icon :size="13"><ArrowDown /></el-icon>
+            </div>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="others" :disabled="tabStore.tabs.length <= 1">
+                  关闭其它页签
+                </el-dropdown-item>
+                <el-dropdown-item command="all" :disabled="tabStore.tabs.length <= 1">
+                  关闭全部（保留仪表盘）
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+      </template>
+
       <!-- 内容 -->
       <main class="main__content">
         <router-view v-slot="{ Component, route }">
-          <transition name="cp-fade" mode="out-in">
-            <component :is="Component" :key="route.path" />
+          <keep-alive v-if="isDesktop && tabStore.enabled" :include="tabStore.componentNames" :max="TAB_CACHE_MAX">
+            <component :is="Component" :key="route.fullPath" />
+          </keep-alive>
+          <transition v-else name="cp-fade" mode="out-in">
+            <component :is="Component" :key="route.fullPath" />
           </transition>
         </router-view>
       </main>
@@ -112,22 +156,29 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Fold, Expand } from '@element-plus/icons-vue'
+import { ArrowDown, Close, Fold, Expand } from '@element-plus/icons-vue'
 import { NAV_ITEMS } from '@/router'
 import { useAccountStore } from '@/store/useAccountStore'
 import { useBatchStore } from '@/store/useBatchStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
+import { useTabStore, TAB_CACHE_MAX } from '@/store/useTabStore'
 import { usePlatform } from '@/utils/platform'
 import { formatRelative } from '@/utils/format'
+import type { OpenedTabRecord } from '@/types'
 
 const route = useRoute()
+const router = useRouter()
 const { isMobile, isDesktop } = usePlatform()
 const collapsed = ref(false)
+const tabsScroller = ref<HTMLElement | null>(null)
 
 const accountStore = useAccountStore()
 const batchStore = useBatchStore()
+const settingsStore = useSettingsStore()
+const tabStore = useTabStore()
 
 const desktopNav = computed(() =>
   NAV_ITEMS.filter((item) => item.desktop && item.path !== '/settings')
@@ -144,6 +195,67 @@ const currentTitle = computed(() => {
 function isActive(path: string): boolean {
   if (path === '/') return route.path === '/'
   return route.path === path || route.path.startsWith(`${path}/`)
+}
+
+/* ---------------- 多标签页 ---------------- */
+watch(
+  () => settingsStore.config.pageMode,
+  async (mode) => {
+    if (mode === 'multi') {
+      await tabStore.enable()
+      await tabStore.syncRoute(route)
+      await scrollActiveTabIntoView()
+    } else {
+      await tabStore.disable()
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => route.fullPath,
+  async () => {
+    await tabStore.syncRoute(route)
+    await scrollActiveTabIntoView()
+  },
+  { immediate: true }
+)
+
+async function scrollActiveTabIntoView() {
+  await nextTick()
+  const scroller = tabsScroller.value
+  if (!scroller) return
+  const active = scroller.querySelector<HTMLElement>('.page-tabs__item.is-active')
+  if (!active) return
+  const target = active.offsetLeft - Math.max(0, (scroller.clientWidth - active.offsetWidth) / 2)
+  scroller.scrollTo({ left: Math.max(0, target), behavior: 'smooth' })
+}
+
+function goTab(tab: OpenedTabRecord) {
+  if (tab.fullPath === route.fullPath) return
+  void router.push(tab.fullPath)
+}
+
+async function closeTab(tab: OpenedTabRecord) {
+  const wasActive = route.fullPath === tab.fullPath
+  const next = await tabStore.closeTab(tab.fullPath)
+  if (wasActive && next) {
+    void router.push(next.fullPath)
+  }
+}
+
+async function onTabsCommand(command: string | number | object) {
+  const current = route.fullPath
+  const opened = tabStore.tabs.some((t) => t.fullPath === current)
+  if (command === 'others') {
+    await tabStore.closeOthers(opened ? current : '/dashboard')
+  } else if (command === 'all') {
+    await tabStore.closeAll()
+    if (route.fullPath !== '/dashboard') {
+      void router.push('/dashboard')
+      return
+    }
+  }
 }
 
 async function onRefreshAll() {
@@ -434,6 +546,105 @@ onMounted(() => {
 
   &__label {
     font-size: 11px;
+  }
+}
+
+/* ---- 多标签页栏 ---- */
+.page-tabs {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  height: 36px;
+  padding: 0 8px;
+  background: var(--cp-bg-elevated);
+  border-bottom: 1px solid var(--cp-border-light);
+
+  &__inner {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  &__item {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 200px;
+    height: 26px;
+    padding: 0 6px 0 12px;
+    border-radius: $radius-sm;
+    border: 1px solid transparent;
+    font-size: 12.5px;
+    color: var(--cp-text-secondary);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+
+    &:hover {
+      background: var(--cp-bg-hover);
+      color: var(--cp-text-primary);
+      border-color: var(--cp-border);
+    }
+
+    &.is-active {
+      background: var(--cp-primary-bg);
+      color: var(--cp-primary);
+      font-weight: 600;
+      border-color: var(--cp-primary);
+    }
+  }
+
+  &__label {
+    @include ellipsis(1);
+  }
+
+  &__close {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: var(--cp-text-secondary);
+
+    &:hover {
+      background: var(--cp-bg-sunken);
+      color: var(--cp-text-primary);
+    }
+  }
+
+  &__more {
+    flex: none;
+    align-self: center;
+    margin-left: 4px;
+
+    &-btn {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: $radius-sm;
+      color: var(--cp-text-secondary);
+      cursor: pointer;
+
+      &:hover {
+        background: var(--cp-bg-hover);
+        color: var(--cp-text-primary);
+      }
+    }
   }
 }
 

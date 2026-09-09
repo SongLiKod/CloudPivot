@@ -348,6 +348,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'PagesView' })
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, Link, Plus, Upload } from '@element-plus/icons-vue'

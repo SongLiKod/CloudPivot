@@ -227,6 +227,21 @@ a {
   font-size: 14px;
   @include ellipsis(1);
 }
+/* 移动端列表序号徽标 */
+.list-index {
+  flex: none;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--cp-bg-sunken);
+  color: var(--cp-text-secondary);
+  font-family: var(--cp-font-mono, monospace);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .cp-list-card__row {
   display: flex;
   justify-content: space-between;

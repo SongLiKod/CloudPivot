@@ -484,6 +484,8 @@ export interface SystemConfig {
   retryTimes: number
   inspectionEnabled: boolean
   inspectionIntervalMinutes: number
+  /** 列表是否显示序号 */
+  showRowIndex: boolean
 }
 
 /* ------------------------------------------------------------------ */

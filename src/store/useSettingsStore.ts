@@ -25,7 +25,8 @@ export const DEFAULT_CONFIG: SystemConfig = {
   requestTimeout: 20,
   retryTimes: 2,
   inspectionEnabled: true,
-  inspectionIntervalMinutes: 30
+  inspectionIntervalMinutes: 30,
+  showRowIndex: false
 }
 
 export const SYNC_INTERVAL_OPTIONS: SyncIntervalMinutes[] = [1, 5, 10, 30]

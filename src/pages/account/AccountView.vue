@@ -109,6 +109,7 @@
             class="account-table"
             @selection-change="(rows: CloudflareAccount[]) => (selectedRows = rows)"
           >
+            <el-table-column v-if="settingsStore.config.showRowIndex" type="index" width="52" align="center" label="#" />
             <el-table-column type="selection" width="44" />
             <el-table-column label="账号" min-width="180">
               <template #default="{ row }">
@@ -158,8 +159,9 @@
         <template v-else>
           <van-pull-refresh v-model="refreshing" @refresh="onRefreshAll">
             <van-empty v-if="!filteredAccounts.length" description="暂无账号" />
-            <div v-for="row in filteredAccounts" :key="row.id" class="cp-list-card">
+            <div v-for="(row, index) in filteredAccounts" :key="row.id" class="cp-list-card">
               <div class="cp-list-card__head">
+                <span v-if="settingsStore.config.showRowIndex" class="list-index">{{ index + 1 }}</span>
                 <span class="cp-list-card__title">{{ row.name }}</span>
                 <el-tag size="small" :type="statusTagType(row.status)" effect="light">{{ statusLabel(row.status) }}</el-tag>
               </div>
@@ -272,6 +274,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePlatform } from '@/utils/platform'
 import { useAccountStore } from '@/store/useAccountStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import { useLogStore } from '@/store/useLogStore'
 import { resolveCredential, purgeSessionCredentials } from '@/store/credentialService'
 import { createBackup, restoreBackup } from '@/utils/db'
@@ -282,6 +285,7 @@ import type { AccountCreateInput, AccountGroup, AccountStatus, CloudflareAccount
 const { isDesktop, isMobile } = usePlatform()
 const accountStore = useAccountStore()
 const logStore = useLogStore()
+const settingsStore = useSettingsStore()
 
 const keyword = ref('')
 const statusFilter = ref('')

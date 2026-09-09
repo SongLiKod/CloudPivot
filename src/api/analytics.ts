@@ -124,15 +124,26 @@ function summarize(groups: AnalyticsBucket[], isDaily: boolean): { totals: ZoneA
   return { totals, timeseries }
 }
 
+/** 转为 YYYY-MM-DD（GraphQL 日粒度过滤器仅接受日期格式） */
+function toDateKey(iso: string): string {
+  return iso.slice(0, 10)
+}
+
 async function fetchGroups(
   ctx: CfRequestContext,
   zoneId: string,
   range: AnalyticsDateRange,
   granularity: '1d' | '1h'
 ): Promise<AnalyticsBucket[]> {
-  const vars = { zoneTag: zoneId, since: range.since, until: range.until }
-  const data = await queryZoneAnalytics(ctx, granularity === '1d' ? DAILY_QUERY : HOURLY_QUERY, vars)
-  return (granularity === '1d' ? data?.httpRequests1dGroups : data?.httpRequests1hGroups) ?? []
+  const isDaily = granularity === '1d'
+  const vars = {
+    zoneTag: zoneId,
+    // 日粒度过滤只认 YYYY-MM-DD；小时粒度（datetime_*）才接受完整时间戳
+    since: isDaily ? toDateKey(range.since) : range.since,
+    until: isDaily ? toDateKey(range.until) : range.until
+  }
+  const data = await queryZoneAnalytics(ctx, isDaily ? DAILY_QUERY : HOURLY_QUERY, vars)
+  return (isDaily ? data?.httpRequests1dGroups : data?.httpRequests1hGroups) ?? []
 }
 
 /** 仪表盘统计数据（默认近 24 小时，小时粒度） */

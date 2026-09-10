@@ -21,29 +21,31 @@ export interface MultipartPart {
  * 不再依赖浏览器自动生成 multipart/boundary：Android 端开启 CapacitorHttp 原生桥后，
  * 交给浏览器自动补的 Content-Type 头会丢失（原生桥按默认 application/json 发送），
  * 导致 Cloudflare 返回 [10001] Content-type 必须为 javascript/multipart 之类的错误。
- * 手工拼装可保证 `Content-Type: multipart/form-data; boundary=...` 在任意平台原样透传。
+ *
+ * 返回 Uint8Array 而非 Blob：CapacitorHttp 的 convertBody 只识别
+ * Uint8Array / ReadableStream / FormData / File / URLSearchParams，
+ * 普通 Blob 会被当成 JSON 序列化成 {}，body 丢失 → [10021] NextPart: EOF。
+ * Uint8Array 会被解码为文本并原样透传我们显式设置的 multipart Content-Type。
  */
 export function buildMultipartBody(
   parts: MultipartPart[]
-): { body: Blob; contentType: string } {
+): { body: Uint8Array; contentType: string } {
   const boundary = `----CloudPivot${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
-  const chunks: (string | Blob)[] = []
-  const push = (s: string) => chunks.push(s)
-
+  let text = ''
   for (const p of parts) {
-    push(`--${boundary}\r\n`)
-    push(`Content-Disposition: form-data; name="${p.name}"`)
-    if (p.filename) push(`; filename="${p.filename}"`)
-    push('\r\n')
-    if (p.contentType) push(`Content-Type: ${p.contentType}\r\n`)
-    push('\r\n')
-    push(p.value)
-    push('\r\n')
+    text += `--${boundary}\r\n`
+    text += `Content-Disposition: form-data; name="${p.name}"`
+    if (p.filename) text += `; filename="${p.filename}"`
+    text += '\r\n'
+    if (p.contentType) text += `Content-Type: ${p.contentType}\r\n`
+    text += '\r\n'
+    text += p.value
+    text += '\r\n'
   }
-  push(`--${boundary}--\r\n`)
+  text += `--${boundary}--\r\n`
 
   return {
-    body: new Blob(chunks, { type: 'multipart/form-data; boundary=' + boundary }),
+    body: new TextEncoder().encode(text),
     contentType: `multipart/form-data; boundary=${boundary}`
   }
 }

@@ -2,6 +2,7 @@
  * Cloudflare Pages 接口（技术文档 §4.5）
  */
 import { cfResult, CF_API_BASE, type CfRequestContext } from './client'
+import { buildMultipartBody } from './workers'
 import type { CfPagesDeployment, CfPagesDomain, CfPagesProject } from '@/types'
 /** 项目列表：GET /accounts/{account_id}/pages/projects（Pages 接口不接受 per_page/page，需不带分页参数） */
 export function listPagesProjects(
@@ -253,12 +254,13 @@ export async function createDirectUploadDeployment(
   manifest: Record<string, string>,
   branch?: string
 ): Promise<CfPagesDeployment> {
-  // 用 fetch + FormData 发送，避免 axios 对 multipart 的 Content-Type/boundary 处理问题
-  const form = new FormData()
-  form.append('manifest', JSON.stringify(manifest))
-  if (branch) form.append('branch', branch)
+  // 手工拼装 multipart 并显式携带 boundary，避免 CapacitorHttp 原生桥丢失自动 Content-Type
+  const parts = [{ name: 'manifest', value: JSON.stringify(manifest) }]
+  if (branch) parts.push({ name: 'branch', value: branch })
+  const mp = buildMultipartBody(parts)
+  const payload = mp.body
 
-  const headers: Record<string, string> = {}
+  const headers: Record<string, string> = { 'Content-Type': mp.contentType }
   const cred = ctx.credential
   if (cred.authType === 'token') headers.Authorization = `Bearer ${cred.token}`
   else {
@@ -268,7 +270,7 @@ export async function createDirectUploadDeployment(
 
   const res = await fetch(
     `${CF_API_BASE}/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}/deployments`,
-    { method: 'POST', headers, body: form }
+    { method: 'POST', headers, body: payload }
   )
   const body = (await res.json().catch(() => null)) as {
     result?: CfPagesDeployment

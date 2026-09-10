@@ -5,6 +5,50 @@ import { cfPaginate, cfRequest, cfResult, type CfRequestContext } from './client
 import type { CfWorkerContent, CfWorkerDomain, CfWorkerRoute, CfWorkerScript, CfWorkerVariable } from '@/types'
 
 /* ------------------------------------------------------------------ */
+/* multipart 构造                                                       */
+/* ------------------------------------------------------------------ */
+
+export interface MultipartPart {
+  name: string
+  value: string
+  contentType?: string
+  filename?: string
+}
+
+/**
+ * 手工构造 multipart/form-data，显式携带 boundary。
+ *
+ * 不再依赖浏览器自动生成 multipart/boundary：Android 端开启 CapacitorHttp 原生桥后，
+ * 交给浏览器自动补的 Content-Type 头会丢失（原生桥按默认 application/json 发送），
+ * 导致 Cloudflare 返回 [10001] Content-type 必须为 javascript/multipart 之类的错误。
+ * 手工拼装可保证 `Content-Type: multipart/form-data; boundary=...` 在任意平台原样透传。
+ */
+export function buildMultipartBody(
+  parts: MultipartPart[]
+): { body: Blob; contentType: string } {
+  const boundary = `----CloudPivot${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+  const chunks: (string | Blob)[] = []
+  const push = (s: string) => chunks.push(s)
+
+  for (const p of parts) {
+    push(`--${boundary}\r\n`)
+    push(`Content-Disposition: form-data; name="${p.name}"`)
+    if (p.filename) push(`; filename="${p.filename}"`)
+    push('\r\n')
+    if (p.contentType) push(`Content-Type: ${p.contentType}\r\n`)
+    push('\r\n')
+    push(p.value)
+    push('\r\n')
+  }
+  push(`--${boundary}--\r\n`)
+
+  return {
+    body: new Blob(chunks, { type: 'multipart/form-data; boundary=' + boundary }),
+    contentType: `multipart/form-data; boundary=${boundary}`
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* 脚本管理                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -40,6 +84,7 @@ export async function getWorkerScript(
 /**
  * 创建 / 部署脚本：PUT /accounts/{account_id}/workers/scripts/{script_name}
  * 通过 multipart/form-data 上传：script.js + metadata.json
+ * 手工拼装 multipart 并显式携带 boundary，避免 CapacitorHttp 原生桥丢失自动 Content-Type
  */
 export async function deployWorkerScript(
   ctx: CfRequestContext,
@@ -55,19 +100,10 @@ export async function deployWorkerScript(
     keep_assets?: boolean
   } = {}
 ): Promise<CfWorkerScript> {
-  const form = new FormData()
   // main_module 同值为 'module' 时表示 ES Module，入口文件名统一为 index.js；
   // 否则视为实际模块文件名（service-worker 风格暂按同名 ESM 上传）
   const isModule = !metadata.main_module || metadata.main_module === 'module'
   const fileName = isModule ? 'index.js' : metadata.main_module!
-
-  form.append(
-    fileName,
-    new Blob([content], {
-      type: isModule ? 'application/javascript+module' : 'application/javascript'
-    }),
-    fileName
-  )
 
   const meta: Record<string, unknown> = {
     main_module: fileName,
@@ -76,13 +112,22 @@ export async function deployWorkerScript(
   if (metadata.bindings?.length) meta.bindings = metadata.bindings
   if (metadata.compatibility_flags) meta.compatibility_flags = metadata.compatibility_flags
   if (metadata.usage_model) meta.usage_model = metadata.usage_model
-  form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }))
+
+  const { body, contentType } = buildMultipartBody([
+    {
+      name: fileName,
+      value: content,
+      filename: fileName,
+      contentType: isModule ? 'application/javascript+module' : 'application/javascript'
+    },
+    { name: 'metadata', value: JSON.stringify(meta), contentType: 'application/json' }
+  ])
 
   return cfResult<CfWorkerScript>(ctx, {
     method: 'PUT',
     url: `/accounts/${accountId}/workers/scripts/${scriptName}`,
-    // 浏览器环境禁止手动指定 multipart Content-Type，否则会覆盖掉自动生成的 boundary
-    data: form,
+    headers: { 'Content-Type': contentType },
+    data: body,
     timeout: 60_000
   })
 }
@@ -208,17 +253,17 @@ export async function updateWorkerBindings(
     json?: string
   }[]
 ): Promise<CfWorkerVariable[]> {
-  const form = new FormData()
-  // PATCH /settings 为 multipart 上传，绑定需放在名为 settings 的 part 中
-  form.append('settings', new Blob([JSON.stringify({ bindings })], { type: 'application/json' }))
-  const body = (await cfRequest<unknown>(ctx, {
+  const { body, contentType } = buildMultipartBody([
+    { name: 'settings', value: JSON.stringify({ bindings }), contentType: 'application/json' }
+  ])
+  const result = (await cfRequest<unknown>(ctx, {
     method: 'PATCH',
     url: `/accounts/${accountId}/workers/scripts/${scriptName}/settings`,
-    data: form,
-    timeout: 40_000,
-    headers: { 'X-Source': 'open_api' }
+    headers: { 'Content-Type': contentType, 'X-Source': 'open_api' },
+    data: body,
+    timeout: 40_000
   })) as unknown as { result?: { bindings?: CfWorkerVariable[] }; bindings?: CfWorkerVariable[] }
-  return body?.result?.bindings ?? body?.bindings ?? []
+  return result?.result?.bindings ?? result?.bindings ?? []
 }
 
 /** 新增 / 更新单个密钥：PUT /accounts/{account_id}/workers/scripts/{script_name}/secrets */

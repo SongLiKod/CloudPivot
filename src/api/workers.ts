@@ -22,14 +22,15 @@ export interface MultipartPart {
  * 交给浏览器自动补的 Content-Type 头会丢失（原生桥按默认 application/json 发送），
  * 导致 Cloudflare 返回 [10001] Content-type 必须为 javascript/multipart 之类的错误。
  *
- * 返回 Uint8Array 而非 Blob：CapacitorHttp 的 convertBody 只识别
- * Uint8Array / ReadableStream / FormData / File / URLSearchParams，
- * 普通 Blob 会被当成 JSON 序列化成 {}，body 丢失 → [10021] NextPart: EOF。
- * Uint8Array 会被解码为文本并原样透传我们显式设置的 multipart Content-Type。
+ * body 用「纯字符串」而非 Blob/Uint8Array：
+ *  - Blob：CapacitorHttp 的 convertBody 不识别 → 被当 JSON 序列化成 {} → body 丢失 → [10021] NextPart: EOF
+ *  - Uint8Array：axios transformRequest 会 `return data.buffer` 转成 ArrayBuffer，convertBody 仍不识别 → 同样丢失
+ *  - string：axios 原样透传；convertBody 走默认分支把字符串交给原生，Java 以我们显式的
+ *    `multipart/form-data; boundary=...` 头把字符串按 UTF-8 原样写出，Cloudflare 正常解析。
  */
 export function buildMultipartBody(
   parts: MultipartPart[]
-): { body: Uint8Array; contentType: string } {
+): { body: string; contentType: string } {
   const boundary = `----CloudPivot${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
   let text = ''
   for (const p of parts) {
@@ -44,10 +45,7 @@ export function buildMultipartBody(
   }
   text += `--${boundary}--\r\n`
 
-  return {
-    body: new TextEncoder().encode(text),
-    contentType: `multipart/form-data; boundary=${boundary}`
-  }
+  return { body: text, contentType: `multipart/form-data; boundary=${boundary}` }
 }
 
 /* ------------------------------------------------------------------ */
